@@ -13,11 +13,16 @@
   <b>Español</b> · <a href="README.en.md">English</a>
 </p>
 
+<p align="center">
+  <img src="docs/img/console.png" alt="Una consola de DataPeach sobre DuckDB: estructura a la izquierda, SQL con colores, resultado y detalle de la tabla" />
+</p>
+
 ---
 
 ## Índice
 
 - [¿Por qué DataPeach?](#por-qué-datapeach)
+- [Capturas](#capturas)
 - [Características](#características)
 - [Motores](#motores)
 - [Requisitos e instalación](#requisitos-e-instalación)
@@ -51,6 +56,25 @@ DataPeach hace lo que se usa todos los días con lo justo:
 
 Es parte de la familia **Peach**, junto a GitPeach y TextPeach: mismos
 colores, atajos y forma de trabajar.
+
+## Capturas
+
+| | |
+|---|---|
+| ![Lista de conexiones con grupos, favoritos y modos de cuidado](docs/img/home.png) | ![Datos de una tabla con filtro, orden y claves foráneas](docs/img/table.png) |
+| **Conexiones:** grupos, favoritos y el cuidado de cada una (producción, solo lectura). | **Tablas:** filtro `WHERE`, orden, paginado y detalle con índices y claves foráneas. |
+| ![Drivers descargados de nuget.org con su versión](docs/img/drivers.png) | ![Formulario de nueva conexión](docs/img/newconn.png) |
+| **Drivers:** se descargan de nuget.org cuando hacen falta; eliges la versión. | **Nueva conexión:** motor, cuidado y carpeta de proyecto para las consolas. |
+
+<p align="center">
+  <img src="docs/img/staging.png" alt="Cambios pendientes en el staging: una edición, una fila borrada y una nueva" /><br/>
+  <sub><b>Staging:</b> cada edición espera como el SQL exacto que se va a ejecutar, hasta que la aplicas o descartas.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/img/about.png" width="420" alt="Acerca de DataPeach, con los atajos de teclado y el selector de idioma" /><br/>
+  <sub><b>Acerca de (F1):</b> versión, atajos de teclado, idioma y carpeta de configuración.</sub>
+</p>
 
 ## Características
 

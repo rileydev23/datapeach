@@ -13,7 +13,30 @@
   <a href="README.md">Español</a> · <b>English</b>
 </p>
 
+<p align="center">
+  <img src="docs/img/en/console.png" alt="A DataPeach console on DuckDB: structure on the left, highlighted SQL, the result and the table details" />
+</p>
+
 ---
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Connection list with groups, favorites and care modes](docs/img/en/home.png) | ![A table's data with filter, ordering and foreign keys](docs/img/en/table.png) |
+| **Connections:** groups, favorites and each one's care mode (production, read-only). | **Tables:** `WHERE` filter, ordering, paging and details with indexes and foreign keys. |
+| ![Drivers downloaded from nuget.org with their version](docs/img/en/drivers.png) | ![New connection form](docs/img/en/newconn.png) |
+| **Drivers:** downloaded from nuget.org when needed; you pick the version. | **New connection:** engine, care mode and a project folder for the consoles. |
+
+<p align="center">
+  <img src="docs/img/en/staging.png" alt="Pending changes in the staging area: an edit, a deleted row and a new one" /><br/>
+  <sub><b>Staging:</b> every edit waits as the exact SQL that will run, until you apply or discard it.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/img/en/about.png" width="420" alt="About DataPeach, with the keyboard shortcuts and the language switch" /><br/>
+  <sub><b>About (F1):</b> version, keyboard shortcuts, language and settings folder.</sub>
+</p>
 
 ## Why DataPeach?
 

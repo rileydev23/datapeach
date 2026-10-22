@@ -67,7 +67,8 @@ public static class DeleteHistoryDialog
         {
             var r = Current();
             bool has = r is not null;
-            restore.IsEnabled = has && r!.HasBackup;
+            // Restored rows are back in the table: a second restore would duplicate them or fail on their key.
+            restore.IsEnabled = has && r!.HasBackup && r.Restored is null;
             toConsole.IsEnabled = copy.IsEnabled = has && r!.HasBackup;
             remove.IsEnabled = has;
             if (r is null)

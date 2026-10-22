@@ -146,7 +146,7 @@ Los detalles están en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y el diseño
 | `Ctrl+N` | Nueva consola |
 | `Ctrl+P` | Ir a tabla |
 | `F4` | Abrir los datos de la tabla seleccionada |
-| `F5` | Volver a leer la estructura |
+| `F5` | Volver a leer la estructura y la tabla abierta |
 | `Ctrl+Shift+K` | Aplicar los cambios pendientes |
 | `F2` · `Ctrl+C` · `Ctrl+Shift+C` | Editar celda · copiar · copiar con encabezados |
 | `F1` | Todos los atajos e idioma |

@@ -87,6 +87,7 @@ public partial class App : Application
                 else if (action.StartsWith("expand:") && c.SchemaRows.FirstOrDefault(r => r.Text == action[7..]) is { } row) c.Toggle(row);
                 else if (action.StartsWith("select:") && c.SchemaRows.FirstOrDefault(r => r.Text == action[7..]) is { } pick) c.SelectedRow = pick;
                 else if (action == "history") _ = c.ShowHistoryCommand.ExecuteAsync(null);
+                else if (action.StartsWith("doc:") && c.Docs.FirstOrDefault(d => d.Title == action[4..]) is { } doc) c.SelectedDoc = doc;
                 else if (action.StartsWith("exec:") && c.Schema.Routines.FirstOrDefault(r => r.Name == action[5..]) is { } routine) _ = c.ExecuteRoutineAsync(routine);
                 else if (action.StartsWith("code:") && c.Schema.Routines.FirstOrDefault(r => r.Name == action[5..]) is { } code) await c.OpenRoutineSourceAsync(code);
                 else if (action == "driver") await c.DownloadDriverCommand.ExecuteAsync(null);

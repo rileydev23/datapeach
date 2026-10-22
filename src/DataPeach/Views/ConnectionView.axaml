@@ -7,7 +7,7 @@
              x:DataType="vm:ConnectionViewModel">
   <UserControl.KeyBindings>
     <KeyBinding Gesture="Ctrl+N" Command="{Binding NewConsoleCommand}" />
-    <KeyBinding Gesture="F5" Command="{Binding RefreshSchemaCommand}" />
+    <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}" />
     <KeyBinding Gesture="F4" Command="{Binding OpenSelectedTableCommand}" />
     <KeyBinding Gesture="Ctrl+Shift+K" Command="{Binding ApplyStagingCommand}" />
   </UserControl.KeyBindings>
@@ -23,7 +23,7 @@
           <Button Content="{l:L cv.openConsole}" Command="{Binding OpenConsoleFileCommand}" ToolTip.Tip="{l:L cv.openConsole.tip}" />
           <Border Width="1" Background="#3a3c42" Margin="6,2" />
           <Button Content="{l:L cv.openTable}" Command="{Binding OpenSelectedTableCommand}" ToolTip.Tip="F4" />
-          <Button Content="{l:L cv.refresh}" Command="{Binding RefreshSchemaCommand}" ToolTip.Tip="{l:L cv.refresh.tip}" />
+          <Button Content="{l:L cv.refresh}" Command="{Binding RefreshCommand}" ToolTip.Tip="{l:L cv.refresh.tip}" />
           <Border Width="1" Background="#3a3c42" Margin="6,2" />
           <Button Content="{Binding HistoryTitle}" Command="{Binding ShowHistoryCommand}" ToolTip.Tip="{l:L cv.history.tip}" />
         </StackPanel>

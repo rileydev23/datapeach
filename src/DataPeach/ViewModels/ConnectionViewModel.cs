@@ -190,7 +190,17 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         finally { IsBusy = false; }
     }
 
+    /// <summary>
+    /// "Refrescar" / F5: the structure and the rows of the table being looked at (with its filter and order).
+    /// Pending changes stay: they are kept by primary key, not by position.
+    /// </summary>
     [RelayCommand]
+    private async Task Refresh()
+    {
+        await RefreshSchemaAsync();
+        if (SelectedDoc is TableDataViewModel current) await current.LoadAsync();
+    }
+
     public async Task RefreshSchemaAsync()
     {
         if (await EnsureSessionAsync() is not { } session) return;
@@ -581,7 +591,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     /// </summary>
     public async Task<bool> RestoreAsync(DeleteRecord r)
     {
-        if (!r.HasBackup) return false;
+        if (!r.HasBackup || r.Restored is not null) return false;
         if (IsReadOnly)
         {
             await Dialogs.Message(Loc.T("conn.readOnly.title"), Loc.T("conn.readOnly.text"));
@@ -592,7 +602,6 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         var text = Loc.F("history.restore.text", Loc.Plural("common.rows", r.Rows.Count), r.TableDisplay,
             r.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), preview + (r.Rows.Count > 3 ? "\n…" : ""));
         if (r.Partial) text += "\n\n" + Loc.T("history.script.partial");
-        if (r.Restored is not null) text += "\n\n" + Loc.F("history.restore.again", r.Restored.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"));
         if (IsProduction) text = Loc.F("history.confirm.production", Entry.Name) + "\n\n" + text;
         if (!await Dialogs.Confirm(Loc.T("history.restore.title"), text, Loc.T("history.restore.ok"))) return false;
         try

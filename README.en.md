@@ -89,7 +89,7 @@ settings folder, under `history/`. It backs up `DELETE FROM table [WHERE …]` a
 | `Ctrl+N` | New console |
 | `Ctrl+P` | Go to table |
 | `F4` | Open the selected table's data |
-| `F5` | Read the structure again |
+| `F5` | Read the structure and the open table again |
 | `Ctrl+Shift+K` | Apply pending changes |
 | `F1` | Every shortcut and the language |
 

@@ -460,7 +460,7 @@ carpeta de configuración, hasta 100.000 por borrado. Un `DELETE` que no se pued
 El botón **Borrados (n)** de la barra de la conexión abre el historial: a la izquierda cada borrado (tabla, fecha,
 origen consola/staging, filas; ámbar "sin respaldo", verde "restaurado"); a la derecha lo que se ejecutó y el script
 que devuelve las filas (`INSERT` fila por fila, con `IDENTITY_INSERT` en SQL Server y SAP ASE), y **Restaurar…**
-(`accent`; confirma siempre, ejecuta en una transacción: o vuelven todas o ninguna), Abrir en la consola, Copiar
+(`accent`; desactivado si ese borrado ya se restauró; confirma siempre, ejecuta en una transacción: o vuelven todas o ninguna), Abrir en la consola, Copiar
 script y Quitar del historial. Arriba, "Guardar los borrados" con el `mode` 7 días · 30 días · 90 días · Siempre
 (30 por defecto); lo viejo se borra al abrir la app.
 
@@ -477,7 +477,7 @@ Atajos comunes a todas las apps Peach (no se reutilizan para otra cosa) y los pr
 | `Ctrl+1 … Ctrl+9` | Ir a la pestaña N |
 | `Ctrl+W` / `Ctrl+F4` | Cerrar consola o tabla (o la conexión si no hay ninguna) |
 | `F1` | Acerca de, atajos e idioma |
-| `F5` | Volver a leer la estructura |
+| `F5` | Volver a leer la estructura y las filas de la tabla abierta (con su filtro y orden; los cambios pendientes se mantienen) |
 | `Ctrl+Shift+E` | Filtrar las tablas |
 | `Ctrl+Enter` | Ejecutar la sentencia del cursor o la selección |
 | `Ctrl+Shift+Enter` | Ejecutar toda la consola |

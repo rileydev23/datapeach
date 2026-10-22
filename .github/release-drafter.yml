@@ -47,8 +47,9 @@ version-resolver:
 template: |
   $CHANGES
 
-  **Download / Descarga** (portable, no installation needed / portable, no requiere instalación):
-  - Windows: `DataPeach.exe`
-  - Linux: `DataPeach-linux-x64.tar.gz` (`tar -xzf DataPeach-linux-x64.tar.gz && ./DataPeach`)
+  **Download / Descarga**
+  - Windows, installer / instalador: `DataPeach-Setup.exe` (Start menu and Settings > Apps, no admin / menú Inicio y Configuración > Aplicaciones, sin administrador)
+  - Windows, portable: `DataPeach.exe`
+  - Linux: `DataPeach-linux-x64.tar.gz`: portable `./DataPeach`, or install / o instalar `./install.sh` (app menu / menú de aplicaciones)
 
   **Full changelog:** https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

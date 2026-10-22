@@ -27,6 +27,7 @@ src/DataPeach                          (Avalonia)
   Views    ── MainWindow · HomeView · ConnectionView · ConsoleView · TableDataView · Dialogs ·
               ConnectionDialog · DriversDialog · GridMenus · MenuPresenter · TabStrip
   Services ── AppServices (Store + Secrets + DriverManager + DeleteHistory) · PeachApps · SingleInstance · LExtension
+              · Updater (releases de GitHub, descarga verificada y reemplazo del exe en uso)
 ```
 
 ## Drivers

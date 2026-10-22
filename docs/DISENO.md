@@ -56,9 +56,13 @@
     drivers se nombran tal cual (Npgsql, MySqlConnector, Microsoft.Data.Sqlite) porque es lo que se descarga.
 11. **Lo que solo se lee nunca parece editable.** Mensajes, SQL del staging y errores se muestran con
     `TextBlock`/`SelectableTextBlock`. `TextBox` es solo para escribir.
-12. **Portable y autocontenido.** Un único `.exe` sin instalador y **sin drivers adentro**: cada driver se
-    descarga cuando hace falta ([8.6](#86-drivers-propio-de-datapeach)). Con un `portable.txt` al lado, los datos
-    (también los drivers) se guardan junto al exe.
+12. **Portable y autocontenido.** Un único `.exe` que funciona sin instalar y **sin drivers adentro**: cada driver
+    se descarga cuando hace falta ([8.6](#86-drivers-propio-de-datapeach)). Con un `portable.txt` al lado, los
+    datos (también los drivers) se guardan junto al exe. El instalador (`DataPeach-Setup.exe`, `install.sh`) es
+    opcional: copia ese mismo exe a una carpeta del usuario, lo registra en el buscador del sistema y deja
+    `installed.txt` al lado.
+13. **Actualizar no interrumpe.** Una versión nueva solo se nota como un botón **↑ x.y.z** junto al **?**; nada
+    se descarga sin confirmar en su popup (Actualizar y reiniciar / Ahora no / Omitir esta versión).
 
 ---
 
@@ -459,6 +463,8 @@ reiniciar, y la app lo dice.
 
 `secrets.json` guarda las contraseñas cifradas con DPAPI para el usuario (en Linux, con permisos 600); nunca en
 `state.json` ni en la carpeta del proyecto. `location.json` se escribe al abrir una compilación Release.
+`state.json` también guarda la búsqueda de versiones (`CheckUpdates`, `LastUpdateCheck`, `LatestVersion`,
+`SkippedVersion`): como mucho una consulta a GitHub al día.
 
 ---
 

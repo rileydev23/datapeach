@@ -26,6 +26,7 @@ public partial class App : Application
             // Debug runs stay anonymous so they never replace the location of the real build.
             PeachApps.Announce("DataPeach");
 #endif
+            Updater.CleanupOld();
 
             var vm = new MainWindowViewModel(app);
             if (desktop.Args is { Length: > 0 } args) vm.OpenFromArgs(args);
@@ -43,7 +44,14 @@ public partial class App : Application
                 PlaceWindow(window, store.State, shown: true);
                 window.Opacity = 1;
                 RunDebugActions(vm);
+                // A few seconds in, so the check never competes with opening the saved tabs.
+                // Debug runs only check when DATAPEACH_FAKE_VERSION asks for it.
+#if DEBUG
+                if (Environment.GetEnvironmentVariable("DATAPEACH_FAKE_VERSION") is not null)
+#endif
+                Avalonia.Threading.DispatcherTimer.RunOnce(() => _ = vm.CheckForUpdatesAsync(manual: false), TimeSpan.FromSeconds(5));
             };
+            vm.CloseRequested += window.CloseConfirmed;
             window.Closing += (_, _) =>
             {
                 var st = store.State;

@@ -134,8 +134,28 @@ Redis está planeado.
 Windows 10/11 x64 o Linux x64. No hace falta instalar .NET ni nada más (en Linux, solo `libicu`, que traen casi
 todas las distribuciones de escritorio).
 
-Descarga `DataPeach.exe` (Windows) o `DataPeach-linux-x64.tar.gz` (Linux) de la página de **Releases** y
-ejecútalo. Es un único archivo, sin instalador.
+Descarga lo que prefieras desde la sección *Releases* del repositorio (o compílalo, ver
+[Compilar desde el código](#compilar-desde-el-código)):
+
+- **Windows, con instalador:** `DataPeach-Setup.exe`. Se instala solo para tu usuario (no pide administrador)
+  en `%LOCALAPPDATA%\Programs\DataPeach`, aparece al buscar en el menú Inicio y se desinstala desde
+  **Configuración > Aplicaciones**.
+- **Windows, portable:** `DataPeach.exe`. Ponlo en la carpeta que quieras y ejecútalo.
+- **Linux:** `DataPeach-linux-x64.tar.gz`. Descomprímelo con `tar -xzf DataPeach-linux-x64.tar.gz` y
+  ejecuta `./DataPeach`, o `./install.sh` para instalarlo en tu usuario (sin root): queda en
+  `~/.local/opt/datapeach`, con el comando `datapeach` y una entrada en el menú de aplicaciones. Para quitarlo,
+  `~/.local/opt/datapeach/uninstall.sh`.
+
+*(Opcional)* **Modo portable:** crea un archivo vacío `portable.txt` junto al exe y los datos se guardarán
+en `.\data\` a su lado en lugar de en tu perfil. Desinstalar nunca borra tus datos.
+
+### Actualizaciones
+
+Una vez al día, al abrirse, DataPeach mira en GitHub si hay una versión nueva. Si la hay, aparece un botón
+**↑ 1.2.0** junto al **?**; nada más cambia. Al pulsarlo ves las novedades y eliges **Actualizar y reiniciar**,
+**Ahora no** u **Omitir esta versión**. Al actualizar, la descarga se verifica con su SHA-256, DataPeach se
+reinicia y vuelve a abrir tus conexiones. Si lo instalaste con el instalador, se actualiza ejecutando el nuevo
+instalador en silencio. En **Acerca de** (F1) puedes desactivar la búsqueda automática o buscar en el momento.
 
 ## Primeros pasos
 
@@ -182,8 +202,9 @@ Los detalles están en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y el diseño
 
 ## Datos, privacidad y modo portable
 
-DataPeach no tiene cuentas ni telemetría y solo se conecta a internet para descargar drivers de nuget.org cuando
-se lo pides. Todo se guarda en `%APPDATA%\peachapps\DataPeach\` (en Linux, `~/.config/peachapps/DataPeach/`):
+DataPeach no tiene cuentas ni telemetría. Solo se conecta a internet para descargar drivers de nuget.org cuando
+se lo pides y para preguntar a la API pública de GitHub por su último release, como mucho una vez al día
+(desactivable en **Acerca de**); la versión nueva solo se descarga si tú lo pides. Todo se guarda en `%APPDATA%\peachapps\DataPeach\` (en Linux, `~/.config/peachapps/DataPeach/`):
 `state.json` (conexiones, sin contraseñas), `secrets.json` (contraseñas cifradas), `drivers\`, `queries\` e
 `history\` (las filas borradas, en texto plano como las consolas).
 Con un archivo `portable.txt` junto al exe, todo eso queda en `.\data\`.

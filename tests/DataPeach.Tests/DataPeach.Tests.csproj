@@ -17,5 +17,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\DataPeach.Core\DataPeach.Core.csproj" />
+    <!-- For the app's pure services (Updater). -->
+    <ProjectReference Include="..\..\src\DataPeach\DataPeach.csproj" />
   </ItemGroup>
 </Project>

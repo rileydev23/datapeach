@@ -137,11 +137,11 @@ todas las distribuciones de escritorio).
 Descarga lo que prefieras desde la sección *Releases* del repositorio (o compílalo, ver
 [Compilar desde el código](#compilar-desde-el-código)):
 
-- **Windows, con instalador:** `DataPeach-Setup.exe`. Se instala solo para tu usuario (no pide administrador)
+- **Windows, con instalador:** `datapeach-windows-x64-setup.exe`. Se instala solo para tu usuario (no pide administrador)
   en `%LOCALAPPDATA%\Programs\DataPeach`, aparece al buscar en el menú Inicio y se desinstala desde
   **Configuración > Aplicaciones**.
-- **Windows, portable:** `DataPeach.exe`. Ponlo en la carpeta que quieras y ejecútalo.
-- **Linux:** `DataPeach-linux-x64.tar.gz`. Descomprímelo con `tar -xzf DataPeach-linux-x64.tar.gz` y
+- **Windows, portable:** `datapeach-windows-x64-portable.exe`. Ponlo en la carpeta que quieras y ejecútalo.
+- **Linux:** `datapeach-linux-x64.tar.gz`. Descomprímelo con `tar -xzf datapeach-linux-x64.tar.gz` y
   ejecuta `./DataPeach`, o `./install.sh` para instalarlo en tu usuario (sin root): queda en
   `~/.local/opt/datapeach`, con el comando `datapeach` y una entrada en el menú de aplicaciones. Para quitarlo,
   `~/.local/opt/datapeach/uninstall.sh`.

@@ -1,2 +1,2 @@
-DataPeach was installed with its installer (DataPeach-Setup.exe on Windows, install.sh on Linux).
+DataPeach was installed with its installer (datapeach-windows-x64-setup.exe on Windows, install.sh on Linux).
 Updates from inside the app keep this installation up to date. Do not delete this file.

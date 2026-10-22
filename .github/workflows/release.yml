@@ -1,5 +1,5 @@
 # Publishing a release (from the draft kept by release-drafter.yml) builds DataPeach for Windows and Linux with the
-# release's version, checks that each build starts, builds the installers (DataPeach-Setup.exe and the install.sh in the
+# release's version, checks that each build starts, builds the installers (datapeach-windows-x64-setup.exe and the install.sh in the
 # Linux archive), checks that they install and uninstall, and attaches everything to the release.
 name: Release
 
@@ -48,7 +48,7 @@ jobs:
         shell: pwsh
         run: |
           # Not Start-Process -Wait: it also waits for child processes, and the silent install leaves DataPeach running.
-          $setup = Start-Process dist\DataPeach-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru
+          $setup = Start-Process dist\datapeach-windows-x64-setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru
           if (-not $setup.WaitForExit(300000)) { throw "The installer did not finish in 5 minutes" }
           if ($setup.ExitCode -ne 0) { throw "The installer exited with code $($setup.ExitCode)" }
           $app = "$env:LOCALAPPDATA\Programs\DataPeach"
@@ -69,7 +69,10 @@ jobs:
       - name: Attach them to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dist/DataPeach.exe dist/DataPeach-Setup.exe --clobber
+        # Descriptive names for the release; the exe itself (and the installed one) stays DataPeach.exe.
+        run: |
+          Copy-Item dist/DataPeach.exe dist/datapeach-windows-x64-portable.exe
+          gh release upload "${{ github.event.release.tag_name }}" dist/datapeach-windows-x64-portable.exe dist/datapeach-windows-x64-setup.exe --clobber
 
   linux:
     runs-on: ubuntu-latest
@@ -101,10 +104,10 @@ jobs:
           cp installer/linux/install.sh installer/linux/uninstall.sh installer/installed.txt dist/
           cp src/DataPeach/Assets/logo.png dist/datapeach.png
           chmod +x dist/install.sh dist/uninstall.sh
-          tar -czf DataPeach-linux-x64.tar.gz -C dist DataPeach install.sh uninstall.sh installed.txt datapeach.png
+          tar -czf datapeach-linux-x64.tar.gz -C dist DataPeach install.sh uninstall.sh installed.txt datapeach.png
       - name: Check that install.sh and uninstall.sh work
         run: |
-          mkdir -p /tmp/tp && tar -xzf DataPeach-linux-x64.tar.gz -C /tmp/tp
+          mkdir -p /tmp/tp && tar -xzf datapeach-linux-x64.tar.gz -C /tmp/tp
           /tmp/tp/install.sh
           test -x ~/.local/opt/datapeach/DataPeach
           test -f ~/.local/opt/datapeach/installed.txt
@@ -118,4 +121,4 @@ jobs:
       - name: Attach it to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" DataPeach-linux-x64.tar.gz --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" datapeach-linux-x64.tar.gz --clobber

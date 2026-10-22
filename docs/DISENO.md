@@ -375,6 +375,26 @@ Dibujada a mano (`Controls/ResultGrid.cs`): solo pinta lo visible, así que 50.0
 - Editar: doble clic, `F2`, `Enter` o simplemente escribir sobre la celda. `Enter` confirma y baja, `Tab` pasa a
   la siguiente, `Esc` cancela. Un valor que no corresponde al tipo de la columna se rechaza con un aviso.
 
+### 7.7b Diagrama de relaciones (Propio de DataPeach)
+
+Pestaña `◇` morado (`#9a7ae0`), de solo lectura: muestra la estructura, nunca la cambia. Se abre desde el menú
+del árbol: **Diagrama** en una base, un esquema o una tabla (su esquema, o toda la base si tiene uno solo), y
+**Diagrama de esta tabla y sus relaciones**, que la pone al centro con las tablas a 1 paso, 2 pasos o todas
+(`Button.mode`).
+
+- `DiagramCanvas` dibuja a mano: cada tabla es una caja `#26272b` con cabecera `#2d2e33`, borde `#3a3c42` (azul
+  de 2 px si está seleccionada) y sus columnas en monoespaciada 12 px: clave primaria en ámbar, clave foránea en
+  teal, el resto en texto normal, y el tipo en `dim` alineado a la derecha. Más de 40 columnas terminan en
+  "… N columnas más".
+- Cada clave foránea es una curva gris (`#5d6066`) de la columna que referencia a la referenciada, con un punto en
+  el lado "muchos" y una barra en el lado "uno". Las de la tabla seleccionada van en azul y encima.
+- Se acomoda solo (`DiagramLayout`): la tabla referenciada a la izquierda de las que la referencian. Arrastrar
+  una tabla la mueve; arrastrar el fondo desplaza; rueda desplaza y `Ctrl`+rueda hace zoom; `Ctrl+0` ajusta.
+  **Reordenar** vuelve todo al acomodo automático y **Ajustar** muestra el diagrama entero.
+- Por debajo de 40 % de zoom solo se dibujan las cajas y sus nombres. Si el diagrama entero no se lee (menos de
+  60 %), abre a 75 % sobre la tabla central o la esquina superior izquierda.
+- Seleccionar una tabla la muestra en el panel de detalle; doble clic abre sus datos.
+
 ### 7.8 Staging (Propio de DataPeach)
 
 Panel al pie de la columna derecha (`#26272b`, borde superior), visible solo con cambios pendientes:

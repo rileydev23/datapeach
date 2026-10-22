@@ -16,15 +16,17 @@ src/DataPeach.Core                     (sin Avalonia)
   History/  DeleteHistory · DeleteRecord · StoredValue · DeleteInverse · DeletePlan
   Sql/      SqlTokenizer · SqlStatements · SqlCompletion · SqlKeywords
   Staging/  StagingArea
+  Diagram/  DiagramGraph (qué tablas y claves) · DiagramLayout (dónde va cada tabla)
   Data/     ValueText · Exporters
 
 src/DataPeach                          (Avalonia)
   ViewModels ── MainWindowViewModel ─┬─ HomeViewModel (conexiones y grupos)
                                      └─ ConnectionViewModel (una pestaña por conexión)
                                           ├─ ConsoleViewModel (una por .sql) ── ResultViewModel ×N
-                                          └─ TableDataViewModel (una por tabla) ── ResultViewModel
-  Controls ── ResultGrid · SqlColorizer · Palette
-  Views    ── MainWindow · HomeView · ConnectionView · ConsoleView · TableDataView · Dialogs ·
+                                          ├─ TableDataViewModel (una por tabla) ── ResultViewModel
+                                          └─ DiagramViewModel (diagrama de una base, un esquema o alrededor de una tabla)
+  Controls ── ResultGrid · DiagramCanvas · SqlColorizer · Palette
+  Views    ── MainWindow · HomeView · ConnectionView · ConsoleView · TableDataView · DiagramView · Dialogs ·
               ConnectionDialog · DriversDialog · GridMenus · MenuPresenter · TabStrip
   Services ── AppServices (Store + Secrets + DriverManager + DeleteHistory) · PeachApps · SingleInstance · LExtension
               · Updater (releases de GitHub, descarga verificada y reemplazo del exe en uso)
@@ -95,7 +97,9 @@ lo ya aplicado si una falla. El historial de borrados guarda la base para restau
 PostgreSQL con `CAST(@pN AS <tipo de la columna>)` para no depender de cómo el driver adivina el tipo; `:pN` en
 Oracle, `$pN` en DuckDB), el `SELECT` de una tabla (`LIMIT`, `TOP` en SQL Server, `FETCH FIRST` en Oracle), cadena
 de conexión, la consulta de estructura (una sola: `pg_catalog`, `information_schema`, `pragma_table_info`,
-`sys.*`, `all_*`, `duckdb_columns()`) y la del detalle (índices y claves foráneas). Un motor nuevo es un `Dialect`
+`sys.*`, `all_*`, `duckdb_columns()`), la del detalle (índices) y la de claves foráneas (`LoadForeignKeysAsync`: una
+fila por par de columnas, de una tabla o de toda la base, que `DbForeignKey.FromRows` agrupa; la usan el detalle y
+el diagrama). Un motor nuevo es un `Dialect`
 nuevo, una fila en `DriverCatalog`, un `DbKind` y una clase en `tests/DataPeach.Tests/Engines/`.
 
 Particularidades que ya resuelve el dialecto:

@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:DataPeach.Services"
+             xmlns:vm="using:DataPeach.ViewModels"
+             xmlns:c="using:DataPeach.Controls"
+             x:Class="DataPeach.Views.DiagramView"
+             x:DataType="vm:DiagramViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#26272b" BorderBrush="#3a3c42" BorderThickness="0,0,0,1" Padding="8,5">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+          <Button Content="{l:L diagram.arrange}" Command="{Binding ArrangeCommand}" ToolTip.Tip="{l:L diagram.arrange.tip}" />
+          <Button Content="{l:L diagram.fit}" x:Name="FitButton" ToolTip.Tip="{l:L diagram.fit.tip}" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding HasFocus}">
+          <TextBlock Text="{Binding FocusText}" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" ToolTip.Tip="{l:L diagram.hops.tip}">
+            <Button Classes="mode left" Classes.active="{Binding IsHops1}" Content="{l:L diagram.hops.1}" Command="{Binding SetHopsCommand}" CommandParameter="1" />
+            <Button Classes="mode mid" Classes.active="{Binding IsHops2}" Content="{l:L diagram.hops.2}" Command="{Binding SetHopsCommand}" CommandParameter="2" />
+            <Button Classes="mode right" Classes.active="{Binding IsHopsAll}" Content="{l:L diagram.hops.all}" Command="{Binding SetHopsCommand}" CommandParameter="0" />
+          </StackPanel>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Background="#1e1f22" BorderBrush="#3a3c42" BorderThickness="0,1,0,0" Padding="10,3">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Text="{Binding Status}" Classes="dim" FontSize="12" VerticalAlignment="Center" />
+        <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" IsVisible="{Binding IsLoading}" Width="80" Height="6" Margin="8,0" />
+        <TextBlock Text="{l:L diagram.hint}" Classes="dim" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Margin="16,0,0,0" />
+      </DockPanel>
+    </Border>
+
+    <Grid Background="#1b1c1f">
+      <c:DiagramCanvas x:Name="Canvas" Source="{Binding Source}" />
+      <TextBlock Text="{l:L diagram.empty}" Classes="dim" Margin="12,10" IsVisible="{Binding IsEmpty}" />
+    </Grid>
+  </DockPanel>
+</UserControl>

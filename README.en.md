@@ -34,6 +34,11 @@
 </p>
 
 <p align="center">
+  <img src="docs/img/en/diagram.png" alt="Diagram around the pedidos table, with its foreign keys highlighted" /><br/>
+  <sub><b>Diagram:</b> one table and the ones one or more keys away, or the whole database, with their foreign keys.</sub>
+</p>
+
+<p align="center">
   <img src="docs/img/en/about.png" width="420" alt="About DataPeach, with the keyboard shortcuts and the language switch" /><br/>
   <sub><b>About (F1):</b> version, keyboard shortcuts, language and settings folder.</sub>
 </p>
@@ -56,6 +61,8 @@ work with just what it needs:
 - **The whole server, not one database.** Leave the database field empty and the tree shows every database on the
   server (SQL Server, PostgreSQL, MySQL, SAP ASE) like SQL Server's explorer: each one with its schemas and folders of
   tables, views, procedures and functions, and the system ones in a folder apart. Each console picks its database.
+- **Relationship diagram.** The tables of a database or schema with their foreign keys, or one table and the ones
+  one, two or more keys away. It lays itself out; drag tables to move them and double click opens their data.
 - **Consoles are files.** Every console is a `.sql` file saved as you type. Pick a project folder and they go to
   `.peach/queries/`, ready to version and share with git.
 - **Drivers on demand.** The exe ships no drivers: each engine's official package is downloaded from nuget.org the

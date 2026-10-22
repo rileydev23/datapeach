@@ -43,6 +43,12 @@ public partial class ConnectionView : UserControl
                 MenuPresenter.Show(SchemaList, DatabaseMenu(vm, row.Text));
                 return;
             }
+            if (row.Kind == SchemaRowKind.Schema)
+            {
+                SchemaList.SelectedItem = row;
+                MenuPresenter.Show(SchemaList, [MenuAction.Sync(Loc.T("cv.menu.diagram"), () => vm.OpenDiagram(row.Database, row.Schema, null))]);
+                return;
+            }
             if (row.Routine is { } r)
             {
                 SchemaList.SelectedItem = row;
@@ -89,6 +95,10 @@ public partial class ConnectionView : UserControl
         MenuAction.Sync(Loc.T("cv.menu.select"), () => vm.OpenInConsole(vm.Dialect.SelectTable(t, null, null, 100) + ";", t.Database)),
         MenuAction.Sync(Loc.T("cv.menu.count"), () => vm.OpenInConsole(vm.Dialect.CountTable(t, null) + ";", t.Database)),
         MenuAction.Separator,
+        MenuAction.Sync(Loc.T("cv.menu.diagramAround"), () => vm.OpenDiagram(t.Database, null, t)),
+        // The table's schema when the database has several, else the whole database.
+        MenuAction.Sync(Loc.T("cv.menu.diagram"), () => vm.OpenDiagram(t.Database, vm.SchemaFor(t.Database).Schemas.Count > 1 ? t.Schema : null, null)),
+        MenuAction.Separator,
         new(Loc.T("cv.menu.copyName"), () => Dialogs.CopyAsync(vm.Dialect.NameOf(t))),
         new(Loc.T("cv.menu.copyColumns"), () => Dialogs.CopyAsync(string.Join(", ", t.Columns.Select(c => vm.Dialect.Name(c.Name))))),
     };
@@ -97,6 +107,7 @@ public partial class ConnectionView : UserControl
     {
         MenuAction.Sync(Loc.T("cv.menu.consoleHere"), () => vm.NewConsoleOn(database)),
         new(Loc.T("cv.menu.refreshDatabase"), () => vm.RefreshDatabaseAsync(database)),
+        MenuAction.Sync(Loc.T("cv.menu.diagram"), () => vm.OpenDiagram(database, null, null)),
         MenuAction.Separator,
         new(Loc.T("cv.menu.copyName"), () => Dialogs.CopyAsync(vm.Dialect.Name(database))),
     };

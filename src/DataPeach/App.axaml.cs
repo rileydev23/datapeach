@@ -92,6 +92,8 @@ public partial class App : Application
                 else if (action.StartsWith("sql:") && c.SelectedDoc is ConsoleViewModel con) con.Document.Text = action[4..].Replace("\\n", "\n");
                 else if (action == "run" && c.SelectedDoc is ConsoleViewModel run) await run.RunAllCommand.ExecuteAsync(null);
                 else if (action.StartsWith("table:")) { await c.EnsureSessionAsync(); await c.RefreshSchemaAsync(); if (c.Schema.Find(null, action[6..]) is { } t) c.OpenTable(t); }
+                else if (action == "diagram") { await c.LoadedSchemaAsync(null); c.OpenDiagram(null, null, null); }
+                else if (action.StartsWith("diagram:") && (await c.LoadedSchemaAsync(null)).Find(null, action[8..]) is { } focus) c.OpenDiagram(focus.Database, null, focus);
                 else if (action.StartsWith("expand:") && c.SchemaRows.FirstOrDefault(r => r.Text == action[7..]) is { } row) c.Toggle(row);
                 else if (action.StartsWith("select:") && c.SchemaRows.FirstOrDefault(r => r.Text == action[7..]) is { } pick) c.SelectedRow = pick;
                 else if (action == "history") _ = c.ShowHistoryCommand.ExecuteAsync(null);

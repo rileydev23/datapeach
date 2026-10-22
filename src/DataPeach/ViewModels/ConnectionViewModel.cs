@@ -242,6 +242,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     {
         await RefreshSchemaAsync();
         if (SelectedDoc is TableDataViewModel current) await current.LoadAsync();
+        else if (SelectedDoc is DiagramViewModel diagram) await diagram.LoadAsync();
     }
 
     public async Task RefreshSchemaAsync()
@@ -343,6 +344,8 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     {
         foreach (var t in Docs.OfType<TableDataViewModel>())
             if (t.Table.Database == fresh.Database && fresh.Find(t.Table.Schema, t.Table.Name) is { } table) t.Rebind(table);
+        foreach (var d in Docs.OfType<DiagramViewModel>())
+            if (EffectiveDatabase(d.Database) == fresh.Database) d.Rebind(fresh);
         if (DetailTable is { } dt && dt.Database == fresh.Database) ShowDetails(fresh.Find(dt.Schema, dt.Name));
     }
 
@@ -527,6 +530,46 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         _ = tab.LoadAsync();
     }
 
+    /// <summary>
+    /// The diagram of <paramref name="database"/> (null: the connection's own): of one schema, of all, or around
+    /// <paramref name="focus"/>. A tab that already shows it is brought forward.
+    /// </summary>
+    public void OpenDiagram(string? database, string? schema, DbTable? focus)
+    {
+        if (Docs.OfType<DiagramViewModel>().FirstOrDefault(d => d.Shows(database, schema, focus)) is { } existing)
+        {
+            SelectedDoc = existing;
+            return;
+        }
+        var tab = new DiagramViewModel(this, database, schema, focus);
+        tab.CloseCommand = new RelayCommand(() => CloseDoc(tab));
+        Docs.Add(tab);
+        SelectedDoc = tab;
+        _ = tab.LoadAsync();
+    }
+
+    /// <summary>The structure of <paramref name="database"/>, waiting for it when it is still being read.</summary>
+    public async Task<SchemaSnapshot> LoadedSchemaAsync(string? database)
+    {
+        if (await EnsureSessionAsync() is null) return SchemaSnapshot.Empty;
+        if (!HasDatabases)
+        {
+            if (Schema == SchemaSnapshot.Empty) await RefreshSchemaAsync();
+            return Schema;
+        }
+        var name = database ?? CurrentDatabase;
+        if (_databases.FirstOrDefault(n => n.Name == name) is not { } node) return SchemaSnapshot.Empty;
+        if (node.Schema is null) await LoadDatabaseAsync(node);
+        return node.Schema ?? SchemaSnapshot.Empty;
+    }
+
+    /// <summary>Every foreign key of <paramref name="database"/> (null: the connection's own).</summary>
+    public async Task<List<DbForeignKey>> LoadForeignKeysAsync(string? database, CancellationToken ct)
+    {
+        if (await EnsureSessionAsync(database) is not { } session) throw new InvalidOperationException(ConnectError ?? Notice);
+        return await Task.Run(() => session.LoadForeignKeysAsync(ct), ct);
+    }
+
     /// <summary>Ctrl+P inside a connection: jump to a table.</summary>
     public async Task QuickOpenTableAsync()
     {
@@ -553,6 +596,8 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         if (r.Parameters.Count == 0) DetailColumns.Add(new DetailLine(Loc.T("detail.noParams"), ""));
         if (r.ReturnType is { } ret) DetailExtras.Add(new DetailLine(Loc.T("detail.returns"), ret, Palette.Pink));
     }
+
+    public void ShowTableDetails(DbTable t) => ShowDetails(t);
 
     private void ShowDetails(DbTable? t)
     {

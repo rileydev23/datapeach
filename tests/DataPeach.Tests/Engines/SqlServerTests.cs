@@ -30,4 +30,15 @@ public sealed class SqlServerTests : EngineTests
                  (VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) c(n), (VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) e(n)) x
         WHERE i <= 3000;
         """;
+
+    protected override string? RoutineSetup => """
+        CREATE OR ALTER FUNCTION dbo.add_one(@x INT) RETURNS INT AS BEGIN RETURN @x + 1; END
+        GO
+        CREATE OR ALTER PROCEDURE dbo.touch_user @id INT, @n INT OUTPUT AS
+        BEGIN
+            UPDATE users SET active = 0 WHERE id = @id;
+            SET @n = @@ROWCOUNT;
+        END
+        GO
+        """;
 }

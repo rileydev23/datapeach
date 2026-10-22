@@ -11,7 +11,9 @@ src/DataPeach.Core                     (sin Avalonia)
   Models ── ConnectionEntry · DbKind · ConnectionMode
   Store · ConnectionGrouping · Secrets · Loc + Strings
   Drivers/  DriverCatalog · DriverManager (descarga y carga) · NuGetPackage (nuspec, carpetas, versiones)
-  Db/       Dialect (Postgres · MySql · Sqlite · SqlServer · Oracle · DuckDb) · DbSession · Schema
+  Db/       Dialect (Postgres · MySql · Sqlite · SqlServer · Oracle · DuckDb · Sybase) · DialectRoutines ·
+            DbSession · Schema
+  History/  DeleteHistory · DeleteRecord · StoredValue · DeleteInverse · DeletePlan
   Sql/      SqlTokenizer · SqlStatements · SqlCompletion · SqlKeywords
   Staging/  StagingArea
   Data/     ValueText · Exporters
@@ -24,14 +26,14 @@ src/DataPeach                          (Avalonia)
   Controls ── ResultGrid · SqlColorizer · Palette
   Views    ── MainWindow · HomeView · ConnectionView · ConsoleView · TableDataView · Dialogs ·
               ConnectionDialog · DriversDialog · GridMenus · MenuPresenter · TabStrip
-  Services ── AppServices (Store + Secrets + DriverManager) · PeachApps · SingleInstance · LExtension
+  Services ── AppServices (Store + Secrets + DriverManager + DeleteHistory) · PeachApps · SingleInstance · LExtension
 ```
 
 ## Drivers
 
 DataPeach no referencia ningún driver. `DriverCatalog` dice qué paquete de nuget.org usa cada motor
 (Microsoft.Data.Sqlite, Npgsql, MySqlConnector, Microsoft.Data.SqlClient, Oracle.ManagedDataAccess.Core,
-DuckDB.NET.Data.Full), la versión recomendada y el tipo de su `DbProviderFactory`. MariaDB usa el de MySQL y
+AdoNetCore.AseClient, DuckDB.NET.Data.Full), la versión recomendada y el tipo de su `DbProviderFactory`. MariaDB usa el de MySQL y
 CockroachDB el de PostgreSQL.
 
 **Instalar** (`DriverManager.InstallAsync`): descarga el `.nupkg` de
@@ -39,7 +41,10 @@ CockroachDB el de PostgreSQL.
 .NET 10; si dos piden la misma, gana la versión más alta). Salta lo que ya trae el runtime (lo que el contexto
 por defecto puede cargar). De cada paquete copia las DLL del mejor `lib/<tfm>/` (o `runtimes/<rid>/lib/`) y las
 nativas de `runtimes/<rid>/native/` a `drivers/<motor>.tmp/`, escribe `driver.json` y, si todo llegó, lo mueve a
-`drivers/<motor>/`. La carpeta temporal se borra siempre. `NuGetPackage` es puro y está testeado.
+`drivers/<motor>/`. La carpeta temporal se borra siempre. `NuGetPackage` es puro y está testeado. El mejor
+framework sale de `NuGetPackage.Rank`: `netX.0` > `netcoreapp3.1` > … > `netcoreapp2.0` > `netstandard2.1` >
+`netstandard2.0` > `netcoreapp1.x`; AdoNetCore.AseClient trae `netcoreapp1.0` y `netcoreapp2.2`, y solo el segundo
+tiene su `DbProviderFactory`.
 
 **Cargar** (`DriverManager.Load`): un `AssemblyLoadContext` por driver (`DriverLoadContext`) que resuelve primero
 desde la app (así `System.Data.Common` es el mismo tipo en los dos lados) y después desde la carpeta del driver;
@@ -64,10 +69,14 @@ antes; medido, cuesta ~15 ms de arranque y nada de memoria. En Linux la app nece
   llama a `DbCommand.Cancel()`, y una sentencia cancelada siempre termina en error aunque el servidor la cierre
   sin uno (MySQL: `KILL QUERY` hace que `SLEEP()` devuelva 1). En DuckDB las escrituras sin `RETURNING` van por
   `ExecuteNonQuery`, porque su lector devuelve el conteo como una fila `Count`.
-- `ApplyAsync(commands)`: todo en una transacción; un `UPDATE`/`DELETE` que no toca filas aborta con
-  `StaleRowException` y deshace todo.
+- `ApplyAsync(commands, ct, captures, captured)`: todo en una transacción; un `UPDATE`/`DELETE` que no toca filas
+  aborta con `StaleRowException` y deshace todo. Un `DELETE` del staging trae su `SELECT` de captura (la misma clave)
+  y su fila se lee justo antes, en la misma transacción.
+- `DeleteWithBackupAsync(sql, backupSql, transactional, maxRows, sink, ct)`: un `DELETE` de la consola lee antes sus
+  filas con `DeletePlan.SelectSql` en la misma transacción (si el usuario abrió una a mano, el driver no deja otra y
+  va sin envoltorio); un `TRUNCATE` se ejecuta justo después de leer, porque en varios motores confirma solo.
 - Solo lectura: `Mode=ReadOnly` en SQLite, `ACCESS_MODE=READ_ONLY` en DuckDB y `SET SESSION … READ ONLY` en
-  PostgreSQL y MySQL al abrir. SQL Server y Oracle no tienen sesión de solo lectura: ahí solo frena la app
+  PostgreSQL y MySQL al abrir. SQL Server, Oracle y SAP ASE no tienen sesión de solo lectura: ahí solo frena la app
   (`SqlStatements.IsWrite`).
 
 `Dialect` es lo único específico de cada motor: comillas, literales (para la vista previa), parámetros (`@pN`; en
@@ -87,13 +96,56 @@ Particularidades que ya resuelve el dialecto:
 - **Oracle:** los nombres sin comillas se guardan en mayúsculas (`Dialect.Name` solo deja sin comillas los que ya lo
   están). `DATA_DEFAULT` es `LONG` y no se lee: los valores por defecto no se muestran. `DBMS_SESSION.SLEEP` no
   se puede cancelar; una consulta sí.
+- **MySQL / MariaDB:** `Allow User Variables=true` (si el usuario no lo fija): sin eso MySqlConnector toma todo
+  `@nombre` por un parámetro y fallan `SET @x = 1` y los OUT de los procedimientos.
+- **SAP ASE (Sybase):** catálogo viejo: `sysobjects`, `syscolumns` (`status & 8` admite NULL, `& 128` identidad),
+  `sysindexes` (`status & 2048` clave primaria, `& 2` único; las columnas con `index_col` del 1 al 16) y
+  `sysreferences` (`fokeyN`/`refkeyN` con `col_name`). Los dueños son los esquemas; la vista de sistema
+  `sysquerymetrics` se deja fuera. `object_id` no acepta corchetes, así que el detalle filtra por nombre y dueño.
+  Corchetes y `TOP n` funcionan desde ASE 15. Cadena con `Charset=utf8` para no perder acentos.
 - **DuckDB:** archivo como SQLite; `DbKinds.DetectFile` reconoce el motor por la cabecera (`SQLite format 3` o
   `DUCK` en el byte 8) abriendo el archivo compartido, porque DuckDB lo deja abierto. STRUCT y MAP llegan como
   diccionarios (`{clave: valor}` en la grilla).
 
-`SqlStatements.Split` corta en `;` y además en una línea `GO` (SQL Server) o `/` (Oracle). Un procedimiento,
-función o trigger de SQL Server y un bloque PL/SQL de Oracle (`BEGIN`, `DECLARE`, `CREATE [OR REPLACE] PROCEDURE…`)
-conservan sus `;` hasta esa línea.
+`SqlStatements.Split` corta en `;` y además en una línea `GO` (SQL Server, SAP ASE) o `/` (Oracle). Un
+procedimiento, función o trigger de SQL Server o SAP ASE y un bloque PL/SQL de Oracle (`BEGIN`, `DECLARE`,
+`CREATE [OR REPLACE] PROCEDURE…`) conservan sus `;` hasta esa línea. En MySQL una línea `DELIMITER $$` cambia el
+separador, como en su cliente; por eso `$$…$$` solo es una cadena en PostgreSQL y DuckDB.
+
+## Procedimientos y funciones
+
+`DialectRoutines.cs` (parcial de cada dialecto) da cuatro cosas por motor: `LoadRoutinesAsync` (lista con sus
+parámetros y lo que devuelven, en la misma carga que la estructura; si falla, la estructura igual se muestra),
+`LoadRoutineSourceAsync` (un script que la recrea), `CallSql` (la llamada, con los valores ya escritos como
+literales por `ArgLiteral`) y `DropSql`.
+
+| Motor | Lista | Código | Llamada |
+|---|---|---|---|
+| PostgreSQL | `pg_proc` (`prokind` f/p, sin las de extensiones), argumentos con `proallargtypes`/`proargmodes` | `pg_get_functiondef` (un `CREATE` de Cockroach pasa a `CREATE OR REPLACE`) | `CALL p(…, NULL por cada OUT)` · `SELECT * FROM f(…)` |
+| MySQL | `information_schema.ROUTINES` y `PARAMETERS` | `SHOW CREATE` entre `DELIMITER $$` | OUT por variables de sesión: `SET @x…; CALL p(…, @x); SELECT @x` |
+| SQL Server | `sys.objects` (P, FN, IF, TF…) y `sys.parameters` | `OBJECT_DEFINITION` como `CREATE OR ALTER` | `DECLARE`, `EXEC … OUTPUT`, `SELECT`; las escalares con su esquema |
+| Oracle | `all_objects` y `all_arguments` (posición 0 = retorno) | `all_source` + `/` | `SELECT f(…) FROM dual` o un bloque `BEGIN … END;` |
+| SAP ASE | `sysobjects` P y SF; `syscolumns` (`status2 & 2` salida; "Return Type" es el retorno) | `syscomments` tras un `DROP` condicional | como SQL Server; funciones siempre con dueño |
+| DuckDB | `duckdb_functions()`: macros y macros de tabla | `CREATE OR REPLACE MACRO` | `SELECT m(…)` / `SELECT * FROM m(…)` |
+
+Ejecutar desde el árbol escribe la llamada en la consola y la corre ahí: la seguridad (producción, solo lectura,
+borrados) es la de cualquier sentencia.
+
+## Historial de borrados
+
+`DeletePlan.For` reconoce los `DELETE`/`TRUNCATE` de una consola y arma el `SELECT *` con la misma tabla, alias y
+`WHERE` (y `ORDER BY`/`LIMIT` de MySQL) y el `COUNT` de la confirmación; lo demás (`USING`, `JOIN`, `RETURNING`,
+`OUTPUT`, `TOP`, CTE, `MERGE`) queda sin respaldo con el motivo. Las palabras dentro de paréntesis (subconsultas)
+no cuentan. `ConnectionViewModel.ConfirmDeletesAsync` pregunta siempre; la confirmación de producción de
+`ConfirmWritesAsync` deja fuera los borrados para no preguntar dos veces.
+
+`DeleteRecord.Create` guarda columnas, tipos declarados (PostgreSQL castea con ellos al restaurar), columnas de
+identidad y las filas como texto con etiqueta de tipo (`StoredValue`: `i:12`, `d:2024-…`, `x:CAFE`…), así vuelven
+como el mismo tipo .NET. `DeleteHistory` es un JSON por borrado en `history/<id de conexión>/`, purgado por
+antigüedad al abrir la app y al cambiar la retención (`AppState.DeleteHistoryDays`, 30 por defecto, 0 = siempre).
+`DeleteInverse` genera el script (literales, para leer o editar) y los comandos (parámetros) que restauran: un
+`INSERT` por fila, con `SET IDENTITY_INSERT` alrededor en SQL Server y SAP ASE si hay columnas de identidad.
+Restaurar usa `ApplyAsync`: todo o nada.
 
 ## Consola
 
@@ -139,6 +191,7 @@ dimensionan con las primeras 200 filas y no se achican mientras llegan más.
 | `secrets.json` (`Secrets`) | Contraseñas por id de conexión, cifradas con DPAPI (Windows) o con permisos 600. |
 | `drivers/<motor>/` | DLLs del driver y `driver.json` (paquete, versión, paquetes descargados, tamaño). |
 | `queries/<id>/*.sql` o `<proyecto>/.peach/queries/*.sql` | Consolas. |
+| `history/<id>/*.json` (`DeleteHistory`) | Borrados con sus filas, en texto plano como las consolas. |
 
 ## Idiomas
 

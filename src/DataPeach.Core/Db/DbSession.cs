@@ -84,7 +84,17 @@ public sealed class DbSession : IAsyncDisposable
     public async Task<SchemaSnapshot> LoadSchemaAsync(CancellationToken ct)
     {
         await using var c = await NewConnectionAsync(ct);
-        return await Dialect.LoadSchemaAsync(c, ct);
+        var schema = await Dialect.LoadSchemaAsync(c, ct);
+        // Routines are a bonus: a server that refuses to list them (old version, no rights) still shows its tables.
+        try { schema.Routines.AddRange(await Dialect.LoadRoutinesAsync(c, ct)); }
+        catch (Exception) when (!ct.IsCancellationRequested) { }
+        return schema;
+    }
+
+    public async Task<string> LoadRoutineSourceAsync(DbRoutine r, CancellationToken ct)
+    {
+        await using var c = await NewConnectionAsync(ct);
+        return await Dialect.LoadRoutineSourceAsync(c, r, ct);
     }
 
     public async Task<TableDetails> LoadDetailsAsync(DbTable t, CancellationToken ct)
@@ -194,8 +204,98 @@ public sealed class DbSession : IAsyncDisposable
         return row;
     }
 
-    /// <summary>Runs statements in one transaction on the main connection: all of them, or none if one fails.</summary>
-    public async Task<long> ApplyAsync(IReadOnlyList<SqlCommandSpec> commands, CancellationToken ct)
+    private DbCommand Command(SqlCommandSpec spec, DbTransaction? tx)
+    {
+        var cmd = _main!.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = spec.Sql;
+        for (int i = 0; i < spec.Parameters.Count; i++)
+        {
+            var p = cmd.CreateParameter();
+            p.ParameterName = Dialect.ParamName(i);
+            p.Value = spec.Parameters[i] ?? DBNull.Value;
+            cmd.Parameters.Add(p);
+        }
+        return cmd;
+    }
+
+    /// <summary>Reads at most <paramref name="max"/> rows of a SELECT; the flag says whether there were more.</summary>
+    private static async Task<CapturedRows> ReadAllAsync(DbCommand cmd, int max, CancellationToken ct)
+    {
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        var cols = new ResultColumn[r.FieldCount];
+        for (int i = 0; i < cols.Length; i++)
+        {
+            Type clr;
+            try { clr = r.GetFieldType(i); } catch { clr = typeof(object); }
+            cols[i] = new ResultColumn(r.GetName(i), "", clr);
+        }
+        var rows = new List<object?[]>();
+        bool more = false;
+        while (await r.ReadAsync(ct))
+        {
+            if (rows.Count >= max) { more = true; break; }
+            rows.Add(ReadRow(r, cols.Length));
+        }
+        return new CapturedRows(cols, rows, more);
+    }
+
+    /// <summary>
+    /// Runs a console DELETE or TRUNCATE after reading the rows it removes with <paramref name="backupSql"/> (at most
+    /// <paramref name="maxRows"/>). A DELETE runs in the same transaction as its read, so the backup is exactly what
+    /// went; a TRUNCATE commits on its own in several engines, so it just runs right after. Without a backup query
+    /// it only runs the statement. Reports the rows changed to <paramref name="sink"/>.
+    /// </summary>
+    public async Task<CapturedRows?> DeleteWithBackupAsync(string sql, string? backupSql, bool transactional, int maxRows, IResultSink sink, CancellationToken ct)
+    {
+        if (ReadOnly) throw new InvalidOperationException(Loc.T("db.readOnly"));
+        await _gate.WaitAsync(ct);
+        try
+        {
+            _main ??= await NewConnectionAsync(ct);
+            DbTransaction? tx = null;
+            // A transaction the user opened by hand in the console makes the driver refuse a new one: then no wrapper.
+            if (transactional && backupSql is not null)
+                try { tx = await _main.BeginTransactionAsync(ct); } catch { tx = null; }
+            try
+            {
+                CapturedRows? backup = null;
+                if (backupSql is not null)
+                {
+                    await using var read = Command(new SqlCommandSpec(backupSql, Array.Empty<object?>()), tx);
+                    read.CommandTimeout = 0;
+                    backup = await ReadAllAsync(read, maxRows, ct);
+                }
+                await using var cmd = Command(new SqlCommandSpec(sql, Array.Empty<object?>()), tx);
+                cmd.CommandTimeout = 0;
+                await using var reg = ct.Register(() => { try { cmd.Cancel(); } catch { /* already finished */ } });
+                var n = await cmd.ExecuteNonQueryAsync(ct);
+                if (tx is not null) await tx.CommitAsync(ct);
+                sink.OnEnd(n, false);
+                return backup;
+            }
+            catch
+            {
+                if (tx is not null) try { await tx.RollbackAsync(CancellationToken.None); } catch { /* connection gone */ }
+                throw;
+            }
+            finally
+            {
+                if (tx is not null) await tx.DisposeAsync();
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Runs statements in one transaction on the main connection: all of them, or none if one fails. A statement
+    /// with a capture (a staged DELETE) first reads its rows with it; they are returned by statement index.
+    /// </summary>
+    public async Task<long> ApplyAsync(IReadOnlyList<SqlCommandSpec> commands, CancellationToken ct,
+        IReadOnlyList<SqlCommandSpec?>? captures = null, Dictionary<int, CapturedRows>? captured = null)
     {
         if (ReadOnly) throw new InvalidOperationException(Loc.T("db.readOnly"));
         await _gate.WaitAsync(ct);
@@ -206,18 +306,15 @@ public sealed class DbSession : IAsyncDisposable
             long total = 0;
             try
             {
-                foreach (var spec in commands)
+                for (int k = 0; k < commands.Count; k++)
                 {
-                    await using var cmd = _main.CreateCommand();
-                    cmd.Transaction = tx;
-                    cmd.CommandText = spec.Sql;
-                    for (int i = 0; i < spec.Parameters.Count; i++)
+                    var spec = commands[k];
+                    if (captures is not null && k < captures.Count && captures[k] is { } read && captured is not null)
                     {
-                        var p = cmd.CreateParameter();
-                        p.ParameterName = Dialect.ParamName(i);
-                        p.Value = spec.Parameters[i] ?? DBNull.Value;
-                        cmd.Parameters.Add(p);
+                        await using var sel = Command(read, tx);
+                        captured[k] = await ReadAllAsync(sel, int.MaxValue, ct);
                     }
+                    await using var cmd = Command(spec, tx);
                     var n = await cmd.ExecuteNonQueryAsync(ct);
                     // An UPDATE or DELETE that touched nothing means the row changed or vanished meanwhile.
                     if (n == 0) throw new StaleRowException(spec.Sql);
@@ -247,6 +344,9 @@ public sealed class DbSession : IAsyncDisposable
         }
     }
 }
+
+/// <summary>Rows read before deleting them; <see cref="More"/> when the limit left some out.</summary>
+public sealed record CapturedRows(IReadOnlyList<ResultColumn> Columns, List<object?[]> Rows, bool More);
 
 public sealed class StaleRowException(string sql) : Exception(Loc.F("db.stale", sql))
 {

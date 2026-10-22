@@ -130,6 +130,9 @@ public class NuGetTests
     [InlineData("netstandard2.0", 10, 2)]
     [InlineData(".NETStandard2.1", 10, 3)]
     [InlineData("net462", 10, -1)]
+    [InlineData("netcoreapp1.0", 10, 1)]
+    [InlineData("netcoreapp2.2", 10, 6)]
+    [InlineData(".NETCoreApp3.1", 10, 8)]
     [InlineData("net8.0-windows7.0", 10, -1)]
     public void RanksFrameworks(string tfm, int runtime, int rank) => Assert.Equal(rank, NuGetPackage.Rank(tfm, runtime));
 

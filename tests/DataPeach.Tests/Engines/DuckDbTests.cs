@@ -21,6 +21,8 @@ public sealed class DuckDbTests : EngineTests
         INSERT INTO users (id, name) SELECT i, 'user ' || i FROM range(1, 3001) t(i);
         """;
 
+    protected override string? RoutineSetup => "CREATE OR REPLACE MACRO add_one(x) AS x + 1;";
+
     /// <summary>DataPeach never creates a database file by mistake, so the test makes it first.</summary>
     protected override async Task PrepareAsync(DbProviderFactory factory)
     {

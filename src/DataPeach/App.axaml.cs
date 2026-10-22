@@ -63,7 +63,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Debug builds only: DATAPEACH_DEBUG_ACTIONS="driver|sql:select 1;|run|table:users|staging|about" drives the UI for
+    /// Debug builds only: DATAPEACH_DEBUG_ACTIONS="driver|sql:select 1;|run|table:users|staging|history|select:name|about" drives the UI for
     /// screenshots without synthesizing keystrokes. Acts on the selected connection tab.
     /// </summary>
     [System.Diagnostics.Conditional("DEBUG")]
@@ -85,6 +85,11 @@ public partial class App : Application
                 else if (action == "run" && c.SelectedDoc is ConsoleViewModel run) await run.RunAllCommand.ExecuteAsync(null);
                 else if (action.StartsWith("table:")) { await c.EnsureSessionAsync(); await c.RefreshSchemaAsync(); if (c.Schema.Find(null, action[6..]) is { } t) c.OpenTable(t); }
                 else if (action.StartsWith("expand:") && c.SchemaRows.FirstOrDefault(r => r.Text == action[7..]) is { } row) c.Toggle(row);
+                else if (action.StartsWith("select:") && c.SchemaRows.FirstOrDefault(r => r.Text == action[7..]) is { } pick) c.SelectedRow = pick;
+                else if (action == "history") _ = c.ShowHistoryCommand.ExecuteAsync(null);
+                else if (action.StartsWith("doc:") && c.Docs.FirstOrDefault(d => d.Title == action[4..]) is { } doc) c.SelectedDoc = doc;
+                else if (action.StartsWith("exec:") && c.Schema.Routines.FirstOrDefault(r => r.Name == action[5..]) is { } routine) _ = c.ExecuteRoutineAsync(routine);
+                else if (action.StartsWith("code:") && c.Schema.Routines.FirstOrDefault(r => r.Name == action[5..]) is { } code) await c.OpenRoutineSourceAsync(code);
                 else if (action == "driver") await c.DownloadDriverCommand.ExecuteAsync(null);
                 else if (action == "staging" && c.SelectedDoc is TableDataViewModel tv && tv.Result is { } r)
                 {

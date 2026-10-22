@@ -34,8 +34,15 @@ public static class NuGetPackage
         }
         if (t.StartsWith("netcoreapp"))
         {
-            // netcoreapp3.1 and friends: newer than netstandard, older than net5.0.
-            return double.TryParse(t[10..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) && v <= runtimeMajor ? 4 : -1;
+            // Older than net5.0 and ranked among themselves: a package may ship netcoreapp1.0 next to netcoreapp2.2
+            // (AdoNetCore.AseClient), and the 1.x build lacks APIs the newer one has (its DbProviderFactory).
+            return t[10..] switch
+            {
+                "1.0" or "1.1" => 1,
+                "2.0" => 4, "2.1" => 5, "2.2" => 6,
+                "3.0" => 7, "3.1" => 8,
+                _ => -1,
+            };
         }
         if (t.StartsWith("net") && t.Contains('.'))
         {

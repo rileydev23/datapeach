@@ -135,7 +135,7 @@ Significado fijo, igual en todas las apps Peach. Si un color ya significa algo, 
 | Azul | `#4a90d9` | Columnas en el árbol (`c`), PostgreSQL. |
 | Morado | `#9a7ae0` | Esquemas (`S`). |
 | Teal | `#4ac7c0` | Tablas y vistas (`T`, `V`), claves foráneas, SQLite. |
-| Rosa | `#d96a9b` | Palabras clave SQL, consolas (`›_`). |
+| Rosa | `#d96a9b` | Código: palabras clave SQL, consolas (`›_`), procedimientos y funciones en el árbol (`P`, `F`). |
 | Oliva | `#c8c84a` | Parámetros (`:id`, `$1`, `@p`). |
 
 ### 3.5 Banners
@@ -166,7 +166,7 @@ En el panel de staging cada sentencia lleva su letra: `~` ámbar (UPDATE), `+` v
 
 Cada motor es una categoría de la serie de la familia: **PostgreSQL** azul `#4a90d9`, **MySQL** ámbar
 `#e0a24a`, **SQLite** teal `#4ac7c0`, **SQL Server** morado `#9a7ae0`, **Oracle** rojo `#e0645a`, **DuckDB** oliva
-`#c8c84a`. MariaDB y CockroachDB se conectan como MySQL y PostgreSQL y llevan su color. Se muestra como un punto `●` de 9–10 px en la pestaña, la barra de estado,
+`#c8c84a`, **SAP ASE** verde `#6cc070`. MariaDB y CockroachDB se conectan como MySQL y PostgreSQL y llevan su color. Se muestra como un punto `●` de 9–10 px en la pestaña, la barra de estado,
 la Home y el diálogo de drivers, y como texto en la Home y la toolbar (motor y versión del servidor).
 
 ### 3.8 Resaltado de SQL "Peach Dark"
@@ -298,13 +298,19 @@ tabla. WHERE y ORDER BY: `Enter` recarga.
 
 ### 7.3 Árbol de estructura (Propio de DataPeach)
 
-Una lista plana virtualizada (rápida con miles de tablas): esquema → tabla o vista → columnas. Filas de 22 px,
+Una lista plana virtualizada (rápida con miles de tablas): esquema → tabla o vista → columnas, y después de las
+tablas los procedimientos y funciones del esquema. Filas de 22 px,
 12 px. Chevron `▸`/`▾` clicable, letra de tipo en su color (`S` morado, `T`/`V` teal, `c` azul, `⚿` ámbar para la
-clave primaria), nombre (vistas en cursiva) y a la derecha, en `dim` 11 px, el tipo de la columna o "sin clave".
+clave primaria, `P`/`F` rosa), nombre (vistas en cursiva) y a la derecha, en `dim` 11 px, el tipo de la columna,
+"sin clave" o la firma de la rutina ("(id int, INOUT n int)"; si es larga, "3 parámetros").
 Con un solo esquema (SQLite, MySQL con base elegida) las tablas van en la raíz; con varios, el esquema por
 defecto se abre solo. El filtro muestra las tablas que coinciden en una lista plana. Doble clic, `Enter` o F4
 abren los datos; menú: Abrir datos · SELECT en la consola · COUNT en la consola · Copiar nombre · Copiar lista
-de columnas.
+de columnas. En una rutina, doble clic o `Enter` abre su código en una consola propia (un script que la recrea:
+`CREATE OR REPLACE`, `CREATE OR ALTER`, `DELIMITER $$` o un `DROP` previo según el motor) y el menú ofrece
+Ejecutar… (un `Form` con un campo por parámetro de entrada; vacío es NULL y `=` escribe una expresión; la llamada
+va a la consola actual y corre ahí, con el cuidado de siempre) · Abrir código · DROP en la consola · Copiar nombre.
+El panel de detalle muestra sus parámetros (los de salida en ámbar) y lo que devuelve.
 
 ### 7.4 Pestañas
 
@@ -358,7 +364,9 @@ ejecutar (monoespaciada 11 px, seleccionable, con su letra de color y `↶` para
 **Aplicar** (`accent`, `Ctrl+Shift+K`) y Descartar. Varias ediciones de una fila son un solo `UPDATE`.
 
 Aplicar ejecuta todo en una transacción. Si una sentencia falla (una clave foránea, una fila que ya no existe)
-se deshace todo, los cambios siguen pendientes y un `Message` explica qué pasó.
+se deshace todo, los cambios siguen pendientes y un `Message` explica qué pasó. Si hay filas a borrar, Aplicar
+pregunta siempre (en cualquier conexión) cuántas se borran por tabla y cuánto tiempo se guardan; cada `DELETE` lee
+antes su fila en la misma transacción para el historial de borrados ([8.8](#88-historial-de-borrados-propio-de-datapeach)).
 
 ### 7.9 Etiquetas de entorno (Propio de DataPeach)
 
@@ -417,7 +425,7 @@ carpeta de proyecto viven en `%APPDATA%\peachapps\DataPeach\queries\<conexión>\
 |---|---|
 | Normal | Nada extra; las ediciones de tablas pasan por el staging. |
 | Producción | Banner ámbar, etiqueta `PROD`; confirmación con las sentencias que escriben antes de ejecutarlas y antes de aplicar el staging. |
-| Solo lectura | Banner azul, etiqueta `SL`; la sesión se abre en solo lectura (PostgreSQL, MySQL, SQLite con `Mode=ReadOnly`, DuckDB con `ACCESS_MODE=READ_ONLY`; SQL Server y Oracle no tienen sesión de solo lectura y solo frena la app); las sentencias que escriben no se ejecutan; las tablas no se editan. |
+| Solo lectura | Banner azul, etiqueta `SL`; la sesión se abre en solo lectura (PostgreSQL, MySQL, SQLite con `Mode=ReadOnly`, DuckDB con `ACCESS_MODE=READ_ONLY`; SQL Server, Oracle y SAP ASE no tienen sesión de solo lectura y solo frena la app); las sentencias que escriben no se ejecutan; las tablas no se editan. |
 
 Qué "escribe" lo decide `SqlStatements.IsWrite`, que es conservador: lo que no reconoce como lectura cuenta como
 escritura.
@@ -440,6 +448,22 @@ reiniciar, y la app lo dice.
 
 ---
 
+### 8.8 Historial de borrados (Propio de DataPeach)
+
+Borrar tiene vuelta atrás. Todo `DELETE` o `TRUNCATE` de una consola pide confirmación en cualquier conexión
+(doble validación: el diálogo dice cuántas filas quita de cada tabla y si se guardan; en producción lo dice
+también), y el staging pregunta lo mismo cuando tiene filas a borrar. Antes de borrar se leen las mismas filas
+(el mismo `WHERE`, en la misma transacción; `TRUNCATE` justo antes) y se guardan en `history/<conexión>/` de la
+carpeta de configuración, hasta 100.000 por borrado. Un `DELETE` que no se puede respaldar (`USING`, `JOIN`,
+`RETURNING`, CTE, `TOP`) se ejecuta igual si se confirma, y la confirmación dice "NO se guardan" y por qué.
+
+El botón **Borrados (n)** de la barra de la conexión abre el historial: a la izquierda cada borrado (tabla, fecha,
+origen consola/staging, filas; ámbar "sin respaldo", verde "restaurado"); a la derecha lo que se ejecutó y el script
+que devuelve las filas (`INSERT` fila por fila, con `IDENTITY_INSERT` en SQL Server y SAP ASE), y **Restaurar…**
+(`accent`; desactivado si ese borrado ya se restauró; confirma siempre, ejecuta en una transacción: o vuelven todas o ninguna), Abrir en la consola, Copiar
+script y Quitar del historial. Arriba, "Guardar los borrados" con el `mode` 7 días · 30 días · 90 días · Siempre
+(30 por defecto); lo viejo se borra al abrir la app.
+
 ## 9. Teclado
 
 Atajos comunes a todas las apps Peach (no se reutilizan para otra cosa) y los propios de DataPeach. Se listan en
@@ -453,7 +477,7 @@ Atajos comunes a todas las apps Peach (no se reutilizan para otra cosa) y los pr
 | `Ctrl+1 … Ctrl+9` | Ir a la pestaña N |
 | `Ctrl+W` / `Ctrl+F4` | Cerrar consola o tabla (o la conexión si no hay ninguna) |
 | `F1` | Acerca de, atajos e idioma |
-| `F5` | Volver a leer la estructura |
+| `F5` | Volver a leer la estructura y las filas de la tabla abierta (con su filtro y orden; los cambios pendientes se mantienen) |
 | `Ctrl+Shift+E` | Filtrar las tablas |
 | `Ctrl+Enter` | Ejecutar la sentencia del cursor o la selección |
 | `Ctrl+Shift+Enter` | Ejecutar toda la consola |
@@ -527,7 +551,9 @@ Cómo se mantiene:
 | Coloreado SQL y autocompletado (vista) | `src/DataPeach/Controls/SqlEditor.cs` |
 | Lexer, sentencias, autocompletado (lógica) | `src/DataPeach.Core/Sql/` |
 | Staging | `src/DataPeach.Core/Staging/StagingArea.cs` |
-| Diálogos | `src/DataPeach/Views/Dialogs.cs`, `ConnectionDialog.cs`, `DriversDialog.cs` |
+| Historial de borrados | `src/DataPeach.Core/History/`, `src/DataPeach/Views/DeleteHistoryDialog.cs` |
+| Procedimientos y funciones por motor | `src/DataPeach.Core/Db/DialectRoutines.cs`, `SybaseDialect.cs` |
+| Diálogos | `src/DataPeach/Views/Dialogs.cs`, `ConnectionDialog.cs`, `DriversDialog.cs`, `DeleteHistoryDialog.cs` |
 | Textos | `src/DataPeach.Core/Strings.cs` |
 | Atajos de F1 | `src/DataPeach/ViewModels/Shortcuts.cs` |
 

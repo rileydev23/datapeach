@@ -35,8 +35,11 @@ public sealed class StagedChange
     public Dictionary<string, object?> Original { get; } = new(StringComparer.Ordinal);
 }
 
-/// <summary>A change turned into SQL: what runs (with parameters) and what the user reviews (with literals).</summary>
-public sealed record StagedStatement(StagedChange Change, SqlCommandSpec Command, string Preview);
+/// <summary>
+/// A change turned into SQL: what runs (with parameters) and what the user reviews (with literals). A DELETE also
+/// carries the SELECT that reads its row first, for the delete history.
+/// </summary>
+public sealed record StagedStatement(StagedChange Change, SqlCommandSpec Command, string Preview, SqlCommandSpec? Capture = null);
 
 /// <summary>
 /// Edits made in a table grid wait here until the user reviews the generated SQL and applies it in one transaction
@@ -154,6 +157,7 @@ public sealed class StagingArea
         var exec = new StringBuilder();
         var view = new StringBuilder();
         var table = d.NameOf(c.Table);
+        SqlCommandSpec? capture = null;
 
         void Value(object? v, DbColumn? col)
         {
@@ -199,7 +203,11 @@ public sealed class StagingArea
                 break;
             case ChangeKind.Delete:
                 Both("DELETE FROM " + table);
+                int whereAt = exec.Length, argsAt = args.Count;
                 Where();
+                // The same WHERE, with the same values, reads the row before it goes.
+                var where = exec.ToString()[whereAt..];
+                capture = new SqlCommandSpec("SELECT * FROM " + table + where, args.Skip(argsAt).ToList());
                 break;
             case ChangeKind.Insert:
                 var cols = c.Table.Columns.Where(x => c.Values.ContainsKey(x.Name)).ToList();
@@ -217,6 +225,6 @@ public sealed class StagingArea
                 Both(")");
                 break;
         }
-        return new StagedStatement(c, new SqlCommandSpec(exec.ToString(), args), view + ";");
+        return new StagedStatement(c, new SqlCommandSpec(exec.ToString(), args), view + ";", capture);
     }
 }

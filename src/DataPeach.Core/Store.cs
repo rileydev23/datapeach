@@ -32,9 +32,12 @@ public sealed class AppState
     public int MaxRows { get; set; } = 50_000;
     /// <summary>Interface language: "en", "es" or null to follow Windows.</summary>
     public string? Language { get; set; }
+    /// <summary>Days the delete history keeps each delete (0 = forever).</summary>
+    public int DeleteHistoryDays { get; set; } = 30;
 }
 
 [JsonSerializable(typeof(AppState))]
+[JsonSerializable(typeof(History.DeleteRecord))]
 [JsonSerializable(typeof(InstalledDriver))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(string))]

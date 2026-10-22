@@ -6,11 +6,11 @@ using DataPeach.Core.Db;
 
 namespace DataPeach.ViewModels;
 
-public enum SchemaRowKind { Schema, Table, View, Column, Message }
+public enum SchemaRowKind { Schema, Table, View, Column, Procedure, Function, Message }
 
 /// <summary>
 /// A row of the schema tree, drawn as a flat virtualized list (fast with thousands of tables): schema → table or
-/// view → columns. Letters and colors follow docs/DISENO.md ("Árbol de esquema").
+/// view → columns, and its procedures and functions. Letters and colors follow docs/DISENO.md ("Árbol de esquema").
 /// </summary>
 public sealed partial class SchemaRow : ObservableObject
 {
@@ -21,6 +21,7 @@ public sealed partial class SchemaRow : ObservableObject
     public string? Schema { get; init; }
     public DbTable? Table { get; init; }
     public DbColumn? Column { get; init; }
+    public DbRoutine? Routine { get; init; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Chevron))]
@@ -35,6 +36,8 @@ public sealed partial class SchemaRow : ObservableObject
         SchemaRowKind.Schema => "S",
         SchemaRowKind.Table => "T",
         SchemaRowKind.View => "V",
+        SchemaRowKind.Procedure => "P",
+        SchemaRowKind.Function => "F",
         SchemaRowKind.Column => Column?.IsPrimaryKey == true ? "⚿" : "c",
         _ => "",
     };
@@ -43,13 +46,15 @@ public sealed partial class SchemaRow : ObservableObject
     {
         SchemaRowKind.Schema => Palette.Purple,
         SchemaRowKind.Table or SchemaRowKind.View => Palette.Teal,
+        SchemaRowKind.Procedure or SchemaRowKind.Function => Palette.Pink,
         SchemaRowKind.Column => Column?.IsPrimaryKey == true ? Palette.Amber : Palette.Blue,
         _ => Palette.Dim,
     };
 
     public bool IsMessage => Kind == SchemaRowKind.Message;
     public FontStyle Style => Kind == SchemaRowKind.View || IsMessage ? FontStyle.Italic : FontStyle.Normal;
-    public string Tip => Table is { } t && Kind != SchemaRowKind.Column ? t.Display : Column is { } c ? $"{c.Name} {c.DataType}{(c.Nullable ? "" : " NOT NULL")}{(c.Default is null ? "" : " DEFAULT " + c.Default)}" : Text;
+    public string Tip => Routine is { } r ? r.Display + r.Signature + (r.ReturnType is null ? "" : " → " + r.ReturnType)
+        : Table is { } t && Kind != SchemaRowKind.Column ? t.Display : Column is { } c ? $"{c.Name} {c.DataType}{(c.Nullable ? "" : " NOT NULL")}{(c.Default is null ? "" : " DEFAULT " + c.Default)}" : Text;
 }
 
 /// <summary>A pending change in the staging panel: its SQL and a button to take it back.</summary>

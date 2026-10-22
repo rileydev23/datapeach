@@ -60,6 +60,9 @@
       <DockPanel>
       <Button DockPanel.Dock="Right" Classes="flat" Content="?" Command="{Binding ShowAboutCommand}"
               ToolTip.Tip="{l:L main.about.tip}" Foreground="#8a8d93" Margin="0,0,8,0" VerticalAlignment="Center" />
+      <!-- Only when a newer release exists (Dock=Right stacks right to left, so it sits just left of "?"). -->
+      <Button DockPanel.Dock="Right" Classes="update" Content="{Binding UpdateLabel}" IsVisible="{Binding HasUpdate}"
+              Command="{Binding ShowUpdateCommand}" ToolTip.Tip="{l:L update.tip}" Margin="0,0,4,0" VerticalAlignment="Center" />
       <!-- Home: a fixed launcher, visually a level above the connection tabs -->
       <Button DockPanel.Dock="Left" Classes="home" Classes.active="{Binding IsHomeSelected}"
               Command="{Binding ShowHomeCommand}" ToolTip.Tip="{l:L main.home.tip}" AutomationProperties.Name="{l:L main.home}">

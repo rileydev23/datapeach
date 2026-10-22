@@ -143,7 +143,113 @@ public partial class MainWindowViewModel : ObservableObject
     private Task ShowAbout() => Dialogs.About(Loc.T("dlg.about.text"), ShownDataFolder, Shortcuts.Groups, Store, () =>
     {
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Store.DataFolder) { UseShellExecute = true }); } catch { }
-    });
+    }, () => CheckForUpdatesAsync(manual: true));
+
+    // ------------------------------------------------------------ updates
+
+    /// <summary>Text of the button next to "?": the new version, or the download progress. Null hides it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdate))]
+    private string? _updateLabel;
+    public bool HasUpdate => UpdateLabel is not null;
+    private bool _updating;
+
+    /// <summary>Asks the window to close without the unsaved-changes prompt (already answered).</summary>
+    public event Action? CloseRequested;
+
+    /// <summary>
+    /// Automatic (at start): at most once a day, only if enabled, and silent on errors. Manual ("Check now" in
+    /// About): always asks GitHub and tells the result.
+    /// </summary>
+    public async Task CheckForUpdatesAsync(bool manual)
+    {
+        var st = Store.State;
+        if (!manual && (!st.CheckUpdates || st.LastUpdateCheck is { } last && DateTimeOffset.Now - last < TimeSpan.FromHours(24)))
+        {
+            ShowKnownUpdate();
+            return;
+        }
+        UpdateInfo? info;
+        try { info = await Updater.CheckAsync(Updater.Current); }
+        catch (Exception ex)
+        {
+            if (manual) await Dialogs.Message(Loc.T("update.check.title"), Loc.F("update.check.failed", ex.Message));
+            return;
+        }
+        st.LastUpdateCheck = DateTimeOffset.Now;
+        st.LatestVersion = info?.Version.ToString(3);
+        // Asking explicitly brings back a version that was skipped.
+        if (manual && info is not null && st.SkippedVersion == st.LatestVersion) st.SkippedVersion = null;
+        Store.Save();
+        ShowKnownUpdate();
+        if (!manual) return;
+        if (info is null) await Dialogs.Message(Loc.T("update.check.title"), Loc.F("update.upToDate", Updater.Current.ToString(3)));
+        else await OfferUpdateAsync(info);
+    }
+
+    private void ShowKnownUpdate()
+    {
+        if (_updating) return;
+        var st = Store.State;
+        UpdateLabel = Updater.TryParseTag(st.LatestVersion, out var v) && v > Updater.Current && st.LatestVersion != st.SkippedVersion
+            ? "↑ " + st.LatestVersion
+            : null;
+    }
+
+    /// <summary>The button next to "?": fresh release data (the saved check only keeps the version), then the popup.</summary>
+    [RelayCommand]
+    private async Task ShowUpdateAsync()
+    {
+        if (_updating) return;
+        UpdateInfo? info;
+        try { info = await Updater.CheckAsync(Updater.Current); }
+        catch (Exception ex)
+        {
+            if (await Dialogs.Confirm(Loc.T("update.check.title"), Loc.F("update.check.failed", ex.Message), Loc.T("update.openPage")))
+                Updater.OpenInBrowser(Updater.ReleasesPage);
+            return;
+        }
+        if (info is null)
+        {
+            Store.State.LatestVersion = null;
+            Store.Save();
+            ShowKnownUpdate();
+            return;
+        }
+        await OfferUpdateAsync(info);
+    }
+
+    private async Task OfferUpdateAsync(UpdateInfo info)
+    {
+        var choice = await Dialogs.Update(info, Updater.Current);
+        if (choice == UpdateChoice.Skip)
+        {
+            Store.State.SkippedVersion = info.Version.ToString(3);
+            Store.Save();
+            ShowKnownUpdate();
+            return;
+        }
+        if (choice != UpdateChoice.Install) return;
+        if (HasUnsavedChanges &&
+            !await Dialogs.Confirm(Loc.T("common.unsaved"), Loc.T("update.unsaved"), Loc.T("update.install")))
+            return;
+
+        _updating = true;
+        UpdateLabel = Loc.F("update.downloading", 0);
+        try
+        {
+            var next = await Updater.ApplyAsync(info, new Progress<double>(f => UpdateLabel = Loc.F("update.downloading", (int)(f * 100))));
+            Updater.Launch(next);
+            CloseRequested?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            _updating = false;
+            ShowKnownUpdate();
+            if (await Dialogs.Confirm(Loc.T("update.failed.title"), Loc.F("update.failed.text", ex.Message), Loc.T("update.openPage")))
+                Updater.OpenInBrowser(info.PageUrl);
+        }
+    }
 
     /// <summary>Ctrl+P: inside a connection, jump to a table; on the home tab, pick a connection.</summary>
     [RelayCommand]

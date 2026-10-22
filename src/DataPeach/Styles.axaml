@@ -93,6 +93,19 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="6,2" />
   </Style>
+  <!-- "↑ 1.2.0" next to "?": a small accent pill, visible only when there is a new version. -->
+  <Style Selector="Button.update">
+    <Setter Property="Background" Value="#1f3550" />
+    <Setter Property="Foreground" Value="#8cc0f0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="9,2" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.update:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#4a90d9" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
   <Style Selector="Button.accent">
     <Setter Property="Background" Value="#4a90d9" />
     <Setter Property="Foreground" Value="White" />

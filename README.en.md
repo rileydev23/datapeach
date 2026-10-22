@@ -97,6 +97,30 @@ settings folder, under `history/`. It backs up `DELETE FROM table [WHERE …]` a
 `IDENTITY_INSERT` on SQL Server and SAP ASE when needed), and restoring asks again. How long deletes are kept (7, 30,
 90 days or always) is chosen in the history itself, from the **Deletes** button of a connection.
 
+## Installation
+
+Download whichever you prefer from the repository's *Releases* (or build it, see
+[Building from source](#building-from-source)):
+
+- **Windows, installer:** `DataPeach-Setup.exe`. It installs for your user only (no administrator) into
+  `%LOCALAPPDATA%\Programs\DataPeach`, shows up in Start menu search and is uninstalled from
+  **Settings > Apps**.
+- **Windows, portable:** `DataPeach.exe`. Put it in any folder and run it.
+- **Linux:** `DataPeach-linux-x64.tar.gz`. Unpack it with `tar -xzf DataPeach-linux-x64.tar.gz` and run
+  `./DataPeach`, or `./install.sh` to install it for your user (no root): it goes to `~/.local/opt/datapeach`,
+  with a `datapeach` command and an entry in the app menu. To remove it, `~/.local/opt/datapeach/uninstall.sh`.
+
+*(Optional)* **Portable mode:** create an empty `portable.txt` file next to the executable and the data is kept
+in `.\data\` beside it instead of in your profile. Uninstalling never deletes your data.
+
+### Updates
+
+Once a day, when it opens, DataPeach asks GitHub whether there is a new version. If there is, a **↑ 1.2.0**
+button appears next to **?**; nothing else changes. Clicking it shows what is new and lets you choose
+**Update and restart**, **Not now** or **Skip this version**. Updating checks the download against its SHA-256,
+restarts DataPeach and reopens your connections. If you used the installer, it updates by running the new installer
+silently. In **About** (F1) you can turn the automatic check off or check right away.
+
 ## Getting started
 
 1. **New connection...**: pick the engine, fill in the host or the file and test it (the first time downloads the
@@ -121,7 +145,9 @@ settings folder, under `history/`. It backs up `DELETE FROM table [WHERE …]` a
 
 ## Data and privacy
 
-No accounts, no telemetry; the only internet access is downloading drivers from nuget.org when you ask. Everything
+No accounts, no telemetry; the only internet access is downloading drivers from nuget.org when you ask and
+asking GitHub's public API for the latest release, at most once a day (can be turned off in **About**); a new
+version is only downloaded if you ask. Everything
 lives in `%APPDATA%\peachapps\DataPeach\`: `state.json` (connections, no passwords), `secrets.json` (passwords
 encrypted with DPAPI), `drivers\`, `queries\` and `history\` (deleted rows, plain text like the consoles). With a `portable.txt` next to the exe it all goes to `.\data\`.
 

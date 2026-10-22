@@ -13,6 +13,8 @@ internal static class Program
         System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
         System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         System.Globalization.CultureInfo.CurrentUICulture = System.Globalization.CultureInfo.InvariantCulture;
+        // Restarted by an update: the previous process has to be gone before we claim the single instance.
+        args = Services.Updater.WaitForPreviousInstance(args);
         // A second launch forwards its paths to the running window and exits.
         if (!Services.SingleInstance.TryBecomePrimary(args)) return;
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

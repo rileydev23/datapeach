@@ -58,6 +58,13 @@ public partial class MainWindow : Window
         ToolTip.SetTip(MaxButton, Loc.T(max ? "win.restore" : "win.maximize"));
     }
 
+    /// <summary>Closes without asking about unsaved changes (the caller already did).</summary>
+    public void CloseConfirmed()
+    {
+        _confirmedClose = true;
+        Close();
+    }
+
     protected override async void OnClosing(WindowClosingEventArgs e)
     {
         if (!_confirmedClose && DataContext is MainWindowViewModel { HasUnsavedChanges: true })

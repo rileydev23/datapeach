@@ -118,6 +118,19 @@ public abstract class EngineTests : IAsyncLifetime
         Assert.Contains("users", Assert.Single(od.ForeignKeys).Definition, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task ReadsEveryForeignKeyOfTheDatabase()
+    {
+        if (!Enabled) return;
+        var keys = await _s.LoadForeignKeysAsync(CancellationToken.None);
+        bool Is(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        var k = Assert.Single(keys, k => Is(k.Schema, Schema) && Is(k.Table, "orders"));
+        Assert.Equal("user_id", Assert.Single(k.Columns), ignoreCase: true);
+        Assert.Equal(Schema, k.RefSchema, ignoreCase: true);
+        Assert.Equal("users", k.RefTable, ignoreCase: true);
+        Assert.Equal("id", Assert.Single(k.RefColumns), ignoreCase: true);
+    }
+
     /// <summary>A database the server keeps for itself, which the tree puts in the system folder.</summary>
     protected virtual string? SystemDatabase => null;
 

@@ -19,6 +19,7 @@ services:
 
   mysql:
     image: mysql:8.4
+    command: --log-bin-trust-function-creators=1
     environment:
       MYSQL_ROOT_PASSWORD: peach
       MYSQL_DATABASE: peach
@@ -32,6 +33,7 @@ services:
 
   mariadb:
     image: mariadb:11.8
+    command: --log-bin-trust-function-creators=1
     environment:
       MARIADB_ROOT_PASSWORD: peach
       MARIADB_DATABASE: peach
@@ -73,4 +75,13 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health?ready=1"]
       interval: 2s
+      retries: 60
+
+  # SAP ASE 16 (Sybase). The image's own login: sa / myPassword, database testdb.
+  sybase:
+    image: datagrip/sybase:16.0
+    ports: ["55000:5000"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/5000'"]
+      interval: 5s
       retries: 60

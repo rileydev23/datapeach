@@ -105,10 +105,14 @@ public sealed partial class ConsoleViewModel : TabViewModel
     [RelayCommand(CanExecute = nameof(IsRunning))]
     private void Cancel() => _run?.Cancel();
 
+    /// <summary>Runs a script written by the app (a routine call…) as if the user had run all of it.</summary>
+    public Task RunScriptAsync(string script) => RunStatementsAsync(SqlStatements.Split(script, Kind).Select(s => s.Text).ToList());
+
     private async Task RunStatementsAsync(List<string> statements)
     {
         if (statements.Count == 0 || IsRunning) return;
         if (!await _owner.ConfirmWritesAsync(statements)) return;
+        if (await _owner.ConfirmDeletesAsync(statements) is not { } deletes) return;
         if (await _owner.EnsureSessionAsync() is not { } session) return;
 
         Save();
@@ -135,7 +139,8 @@ public sealed partial class ConsoleViewModel : TabViewModel
                 }, clock);
                 try
                 {
-                    await Task.Run(() => session.RunAsync(sql, collector, _owner.MaxRows, ct), ct);
+                    if (deletes.TryGetValue(sql, out var plan)) await RunDeleteAsync(session, sql, plan, collector, ct);
+                    else await Task.Run(() => session.RunAsync(sql, collector, _owner.MaxRows, ct), ct);
                     done++;
                     if (SqlStatements.IsWrite(sql, Kind)) changedStructure |= IsDdl(sql);
                 }
@@ -166,6 +171,31 @@ public sealed partial class ConsoleViewModel : TabViewModel
                 : last?.Summary ?? "";
             _owner.Notice = RunStatus;
             if (changedStructure) _ = _owner.RefreshSchemaAsync();
+        }
+    }
+
+    /// <summary>A confirmed DELETE or TRUNCATE: reads its rows first and keeps them in the delete history.</summary>
+    private async Task RunDeleteAsync(Core.Db.DbSession session, string sql, Core.History.DeletePlan plan, ResultCollector collector, CancellationToken ct)
+    {
+        var affected = new AffectedSink(collector);
+        var backup = await Task.Run(() => session.DeleteWithBackupAsync(sql, plan.SelectSql, !plan.IsTruncate, ConnectionViewModel.MaxBackupRows, affected, ct), ct);
+        // A delete that removed nothing leaves nothing to put back.
+        if (affected.Affected == 0 && backup is not { Rows.Count: > 0 }) return;
+        var known = _owner.Schema.Find(plan.Schema, plan.Table);
+        _owner.Remember(Core.History.DeleteRecord.Create(_owner.Entry, "console", plan.Schema, plan.Table, sql, affected.Affected, backup, known,
+            plan.Unsupported, DateTimeOffset.Now));
+    }
+
+    /// <summary>Passes the outcome on to the console's results and keeps the row count for the history.</summary>
+    private sealed class AffectedSink(Core.Db.IResultSink inner) : Core.Db.IResultSink
+    {
+        public long Affected = -1;
+        public void OnResult(IReadOnlyList<Core.Db.ResultColumn> columns) => inner.OnResult(columns);
+        public void OnRows(IReadOnlyList<object?[]> rows) => inner.OnRows(rows);
+        public void OnEnd(long recordsAffected, bool truncated)
+        {
+            Affected = recordsAffected;
+            inner.OnEnd(recordsAffected, truncated);
         }
     }
 

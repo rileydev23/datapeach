@@ -25,6 +25,8 @@ public static class DriverCatalog
         new(DbKind.MySql, "MySqlConnector", "2.6.2", "MySqlConnector", "MySqlConnector.MySqlConnectorFactory"),
         new(DbKind.SqlServer, "Microsoft.Data.SqlClient", "7.1.1", "Microsoft.Data.SqlClient", "Microsoft.Data.SqlClient.SqlClientFactory"),
         new(DbKind.Oracle, "Oracle.ManagedDataAccess.Core", "23.26.400", "Oracle.ManagedDataAccess", "Oracle.ManagedDataAccess.Client.OracleClientFactory"),
+        // SAP ASE (Sybase): open source TDS 5.0 client, pure managed code.
+        new(DbKind.Sybase, "AdoNetCore.AseClient", "0.19.2", "AdoNetCore.AseClient", "AdoNetCore.AseClient.AseClientFactory"),
         // The Full package carries the native engine of every platform (~110 MB download); only this machine's is kept.
         new(DbKind.DuckDb, "DuckDB.NET.Data.Full", "1.5.6.1", "DuckDB.NET.Data", "DuckDB.NET.Data.DuckDBClientFactory"),
     };

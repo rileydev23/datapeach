@@ -10,7 +10,7 @@ namespace DataPeach.Core.Db;
 /// What DataPeach itself knows about an engine: how to name things, read the structure and write literals. The
 /// driver (downloaded) does the talking; this is the only engine-specific code of the app.
 /// </summary>
-public abstract class Dialect
+public abstract partial class Dialect
 {
     public abstract DbKind Kind { get; }
 
@@ -21,6 +21,7 @@ public abstract class Dialect
         DbKind.SqlServer => SqlServerDialect.Instance,
         DbKind.Oracle => OracleDialect.Instance,
         DbKind.DuckDb => DuckDbDialect.Instance,
+        DbKind.Sybase => SybaseDialect.Instance,
         _ => SqliteDialect.Instance,
     };
 
@@ -153,7 +154,7 @@ public abstract class Dialect
     }
 }
 
-public sealed class PostgresDialect : Dialect
+public sealed partial class PostgresDialect : Dialect
 {
     public static readonly PostgresDialect Instance = new();
     public override DbKind Kind => DbKind.Postgres;
@@ -239,13 +240,13 @@ public sealed class PostgresDialect : Dialect
                 t = new DbTable { Schema = schema, Name = name, Kind = kind(S(r[2])) };
                 tables.Add(t);
             }
-            t.Columns.Add(new DbColumn(S(r[3]), S(r[4]), B(r[5]), B(r[7]), r[6] is null ? null : S(r[6])));
+            t.Columns.Add(new DbColumn(S(r[3]), S(r[4]), B(r[5]), B(r[7]), r[6] is null ? null : S(r[6]), r.Length > 8 && B(r[8])));
         }
         return new SchemaSnapshot { Schemas = schemas, Tables = tables, DefaultSchema = current };
     }
 }
 
-public sealed class MySqlDialect : Dialect
+public sealed partial class MySqlDialect : Dialect
 {
     public static readonly MySqlDialect Instance = new();
     public override DbKind Kind => DbKind.MySql;
@@ -262,6 +263,8 @@ public sealed class MySqlDialect : Dialect
         if (e.User.Length > 0) b["User ID"] = e.User;
         if (password is not null) b["Password"] = password;
         if (!HasOption(e, "Application Name", "ApplicationName", "App")) b["Application Name"] = "DataPeach";
+        // Without it the driver takes every @name for a parameter, so "SET @x = 1" and procedure OUT values fail.
+        if (!HasOption(e, "Allow User Variables", "AllowUserVariables")) b["Allow User Variables"] = true;
         return b.ConnectionString;
     }
 
@@ -284,7 +287,7 @@ public sealed class MySqlDialect : Dialect
             WHERE {scope}
             ORDER BY c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION
             """, ct);
-        foreach (var r in rows) r[7] = r[8]; // same layout as PostgreSQL: [7] = primary key
+        foreach (var r in rows) (r[7], r[8]) = (r[8], null); // same layout as PostgreSQL: [7] = primary key, [8] = identity
         return PostgresDialect.Build(schemas, current, rows, k => k.Contains("VIEW") ? DbObjectKind.View : DbObjectKind.Table);
     }
 
@@ -310,7 +313,7 @@ public sealed class MySqlDialect : Dialect
     }
 }
 
-public sealed class SqliteDialect : Dialect
+public sealed partial class SqliteDialect : Dialect
 {
     public static readonly SqliteDialect Instance = new();
     public override DbKind Kind => DbKind.Sqlite;
@@ -368,7 +371,7 @@ public sealed class SqliteDialect : Dialect
     }
 }
 
-public sealed class SqlServerDialect : Dialect
+public sealed partial class SqlServerDialect : Dialect
 {
     public static readonly SqlServerDialect Instance = new();
     public override DbKind Kind => DbKind.SqlServer;
@@ -425,7 +428,8 @@ public sealed class SqlServerDialect : Dialect
         var rows = await QueryAsync(c, $"""
             SELECT s.name, o.name, o.type, c.name, {TypeSql}, c.is_nullable, OBJECT_DEFINITION(c.default_object_id),
                    CAST(CASE WHEN EXISTS (SELECT 1 FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-                                          WHERE i.object_id = o.object_id AND i.is_primary_key = 1 AND ic.column_id = c.column_id) THEN 1 ELSE 0 END AS bit)
+                                          WHERE i.object_id = o.object_id AND i.is_primary_key = 1 AND ic.column_id = c.column_id) THEN 1 ELSE 0 END AS bit),
+                   c.is_identity
             FROM sys.objects o
             JOIN sys.schemas s ON s.schema_id = o.schema_id
             JOIN sys.columns c ON c.object_id = o.object_id
@@ -467,7 +471,7 @@ public sealed class SqlServerDialect : Dialect
     }
 }
 
-public sealed class OracleDialect : Dialect
+public sealed partial class OracleDialect : Dialect
 {
     public static readonly OracleDialect Instance = new();
     public override DbKind Kind => DbKind.Oracle;
@@ -558,7 +562,7 @@ public sealed class OracleDialect : Dialect
     }
 }
 
-public sealed class DuckDbDialect : Dialect
+public sealed partial class DuckDbDialect : Dialect
 {
     public static readonly DuckDbDialect Instance = new();
     public override DbKind Kind => DbKind.DuckDb;

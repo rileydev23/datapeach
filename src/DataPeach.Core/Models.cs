@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace DataPeach.Core;
 
 /// <summary>Database engines DataPeach talks to. The driver of each one is downloaded on demand (see Drivers/).</summary>
-public enum DbKind { Sqlite, Postgres, MySql, SqlServer, Oracle, DuckDb }
+public enum DbKind { Sqlite, Postgres, MySql, SqlServer, Oracle, DuckDb, Sybase }
 
 /// <summary>
 /// How careful the app is with a connection: <see cref="Production"/> asks before anything that writes and shows a
@@ -57,7 +57,7 @@ public sealed class ConnectionGroup
 
 public static class DbKinds
 {
-    public static readonly DbKind[] All = { DbKind.Sqlite, DbKind.Postgres, DbKind.MySql, DbKind.SqlServer, DbKind.Oracle, DbKind.DuckDb };
+    public static readonly DbKind[] All = { DbKind.Sqlite, DbKind.Postgres, DbKind.MySql, DbKind.SqlServer, DbKind.Oracle, DbKind.Sybase, DbKind.DuckDb };
 
     public static string Name(DbKind k) => k switch
     {
@@ -67,6 +67,7 @@ public static class DbKinds
         DbKind.SqlServer => "SQL Server",
         DbKind.Oracle => "Oracle",
         DbKind.DuckDb => "DuckDB",
+        DbKind.Sybase => "SAP ASE",
         _ => k.ToString(),
     };
 
@@ -76,6 +77,7 @@ public static class DbKinds
         DbKind.MySql => 3306,
         DbKind.SqlServer => 1433,
         DbKind.Oracle => 1521,
+        DbKind.Sybase => 5000,
         _ => 0,
     };
 
@@ -88,6 +90,7 @@ public static class DbKinds
         DbKind.SqlServer => "#9a7ae0",
         DbKind.Oracle => "#e0645a",
         DbKind.DuckDb => "#c8c84a",
+        DbKind.Sybase => "#6cc070",
         _ => "#8a8d93",
     };
 

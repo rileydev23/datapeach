@@ -24,6 +24,8 @@
           <Border Width="1" Background="#3a3c42" Margin="6,2" />
           <Button Content="{l:L cv.openTable}" Command="{Binding OpenSelectedTableCommand}" ToolTip.Tip="F4" />
           <Button Content="{l:L cv.refresh}" Command="{Binding RefreshSchemaCommand}" ToolTip.Tip="{l:L cv.refresh.tip}" />
+          <Border Width="1" Background="#3a3c42" Margin="6,2" />
+          <Button Content="{Binding HistoryTitle}" Command="{Binding ShowHistoryCommand}" ToolTip.Tip="{l:L cv.history.tip}" />
         </StackPanel>
       </DockPanel>
     </Border>

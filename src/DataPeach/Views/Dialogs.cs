@@ -233,7 +233,7 @@ public static class Dialogs
         return r?[0];
     }
 
-    public static async Task<string[]?> Form(string title, (string Label, string Initial)[] fields, string? ok = null)
+    public static async Task<string[]?> Form(string title, (string Label, string Initial)[] fields, string? ok = null, string? hint = null)
     {
         var owner = Owner;
         if (owner is null) return null;
@@ -248,6 +248,7 @@ public static class Dialogs
             boxes.Add(tb);
             panel.Children.Add(tb);
         }
+        if (hint is not null) panel.Children.Add(new TextBlock { Text = hint, Foreground = Palette.Dim, FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
         var okBtn = Btn(ok ?? Loc.T("common.ok"), true);
         var cancel = Btn(Loc.T("common.cancel"));
         void Accept() { result = boxes.Select(b => b.Text ?? "").ToArray(); w.Close(); }

@@ -36,7 +36,14 @@ public partial class ConnectionView : UserControl
         SchemaList.ContextRequested += (_, e) =>
         {
             e.Handled = true;
-            if (Vm is not { } vm || RowAt(e.Source) is not { Table: { } t } row) return;
+            if (Vm is not { } vm || RowAt(e.Source) is not { } row) return;
+            if (row.Routine is { } r)
+            {
+                SchemaList.SelectedItem = row;
+                MenuPresenter.Show(SchemaList, RoutineMenu(vm, r));
+                return;
+            }
+            if (row.Table is not { } t) return;
             SchemaList.SelectedItem = row;
             MenuPresenter.Show(SchemaList, TableMenu(vm, t));
         };
@@ -78,6 +85,15 @@ public partial class ConnectionView : UserControl
         MenuAction.Separator,
         new(Loc.T("cv.menu.copyName"), () => Dialogs.CopyAsync(vm.Dialect.NameOf(t))),
         new(Loc.T("cv.menu.copyColumns"), () => Dialogs.CopyAsync(string.Join(", ", t.Columns.Select(c => vm.Dialect.Name(c.Name))))),
+    };
+
+    private static IReadOnlyList<MenuAction> RoutineMenu(ConnectionViewModel vm, Core.Db.DbRoutine r) => new List<MenuAction>
+    {
+        new(Loc.T("cv.menu.run"), () => vm.ExecuteRoutineAsync(r)),
+        new(Loc.T("cv.menu.code"), () => vm.OpenRoutineSourceAsync(r), "Enter"),
+        MenuAction.Sync(Loc.T("cv.menu.drop"), () => vm.ScriptDropRoutine(r)),
+        MenuAction.Separator,
+        new(Loc.T("cv.menu.copyName"), () => Dialogs.CopyAsync(vm.Dialect.NameOf(r))),
     };
 
     private static void ShowFile(string path)

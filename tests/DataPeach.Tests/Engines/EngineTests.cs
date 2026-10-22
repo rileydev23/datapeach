@@ -1,6 +1,7 @@
 using DataPeach.Core;
 using DataPeach.Core.Db;
 using DataPeach.Core.Drivers;
+using DataPeach.Core.History;
 using DataPeach.Core.Sql;
 using DataPeach.Core.Staging;
 
@@ -195,5 +196,90 @@ public abstract class EngineTests : IAsyncLifetime
         await using var ro = await OpenAsync(ConnectionMode.ReadOnly);
         await Assert.ThrowsAnyAsync<Exception>(() => ro.RunAsync("UPDATE users SET name = 'x' WHERE id = 4", new Sink(), 10, CancellationToken.None));
         Assert.Equal("user 4", (await RunAsync("SELECT name FROM users WHERE id = 4")).Rows[0][0]);
+    }
+
+    /// <summary>
+    /// Creates the function add_one(x) = x + 1 and, where the engine has procedures, touch_user(id[, n OUT]) that sets
+    /// users.active = 0. Null for engines without routines.
+    /// </summary>
+    protected virtual string? RoutineSetup => null;
+
+    private async Task RunScriptAsync(string script)
+    {
+        foreach (var st in SqlStatements.Split(script, Entry.Kind)) await _s.RunAsync(st.Text, new Sink(), 10, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ListsReadsAndCallsRoutines()
+    {
+        if (!Enabled || RoutineSetup is null) return;
+        await RunScriptAsync(RoutineSetup);
+        var schema = await _s.LoadSchemaAsync(CancellationToken.None);
+        var f = Assert.Single(schema.Routines, r => r.Name.Equals("add_one", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(DbRoutineKind.Function, f.Kind);
+        Assert.Single(Dialect.InputsOf(f));
+        var result = await RunAsync(_s.Dialect.CallSql(f, new[] { "41" }));
+        Assert.Equal(42L, Convert.ToInt64(result.Rows[0][0]));
+
+        // Its code comes back as a script that recreates it.
+        var source = await _s.LoadRoutineSourceAsync(f, CancellationToken.None);
+        Assert.Contains("add_one", source, StringComparison.OrdinalIgnoreCase);
+        await RunScriptAsync(source);
+        Assert.Equal(42L, Convert.ToInt64((await RunAsync(_s.Dialect.CallSql(f, new[] { "41" }))).Rows[0][0]));
+
+        if (schema.Routines.FirstOrDefault(r => r.Name.Equals("touch_user", StringComparison.OrdinalIgnoreCase)) is not { } p) return;
+        Assert.Equal(DbRoutineKind.Procedure, p.Kind);
+        Assert.EndsWith("id", p.Parameters[0].Name.ToLowerInvariant());
+        await RunScriptAsync(_s.Dialect.CallSql(p, Dialect.InputsOf(p).Select(_ => "7").ToList()));
+        Assert.Equal(0L, Convert.ToInt64((await RunAsync("SELECT active FROM users WHERE id = 7")).Rows[0][0]));
+        await RunScriptAsync((await _s.LoadRoutineSourceAsync(p, CancellationToken.None)));
+    }
+
+    [Fact]
+    public async Task BacksUpADeleteAndPutsItBack()
+    {
+        if (!Enabled) return;
+        var schema = await _s.LoadSchemaAsync(CancellationToken.None);
+        const string sql = "DELETE FROM users WHERE id <= 5";
+        var plan = DeletePlan.For(sql, Entry.Kind, _s.Dialect, schema)!;
+        Assert.True(plan.CanBackup);
+        var sink = new Sink();
+        var backup = await _s.DeleteWithBackupAsync(sql, plan.SelectSql, true, 100, sink, CancellationToken.None);
+        Assert.Equal(5, backup!.Rows.Count);
+        Assert.Equal(5, sink.Affected);
+        Assert.Empty((await RunAsync("SELECT id FROM users WHERE id <= 5")).Rows);
+
+        // Through the history file, as the app does it.
+        var dir = Path.Combine(Path.GetTempPath(), "dp-engine-history-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var history = new DeleteHistory(dir);
+            var entry = Entry;
+            history.Add(DeleteRecord.Create(entry, "console", plan.Schema, plan.Table, sql, sink.Affected, backup, schema.Find(plan.Schema, plan.Table), null, DateTimeOffset.Now));
+            var saved = Assert.Single(history.List(entry.Id));
+            Assert.Equal(5, await _s.ApplyAsync(DeleteInverse.Commands(saved, _s.Dialect), CancellationToken.None));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+        var back = await RunAsync("SELECT id, name FROM users WHERE id <= 5 ORDER BY id");
+        Assert.Equal(5, back.Rows.Count);
+        Assert.Equal("user 1", back.Rows[0][1]);
+    }
+
+    [Fact]
+    public async Task AStagedDeleteKeepsItsRow()
+    {
+        if (!Enabled) return;
+        var schema = await _s.LoadSchemaAsync(CancellationToken.None);
+        var users = schema.Find(Schema, "users")!;
+        var staging = new StagingArea();
+        staging.Delete(users, new RowKey(new object?[] { 11 }));
+        var statements = staging.Build(_s.Dialect);
+        var captured = new Dictionary<int, CapturedRows>();
+        Assert.Equal(1, await _s.ApplyAsync(statements.Select(s => s.Command).ToList(), CancellationToken.None, statements.Select(s => s.Capture).ToList(), captured));
+        var row = Assert.Single(captured[0].Rows);
+        Assert.Equal("user 11", row[1]);
     }
 }

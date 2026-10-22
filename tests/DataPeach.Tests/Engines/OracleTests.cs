@@ -22,4 +22,18 @@ public sealed class OracleTests : EngineTests
         INSERT INTO users (id, name) SELECT LEVEL, 'user ' || LEVEL FROM dual CONNECT BY LEVEL <= 3000;
         COMMIT;
         """;
+
+    protected override string? RoutineSetup => """
+        CREATE OR REPLACE FUNCTION add_one(x NUMBER) RETURN NUMBER IS
+        BEGIN
+            RETURN x + 1;
+        END;
+        /
+        CREATE OR REPLACE PROCEDURE touch_user(id IN NUMBER, n OUT NUMBER) IS
+        BEGIN
+            UPDATE users SET active = 0 WHERE users.id = touch_user.id;
+            n := SQL%ROWCOUNT;
+        END;
+        /
+        """;
 }

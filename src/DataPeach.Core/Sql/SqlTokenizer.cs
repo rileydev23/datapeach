@@ -22,6 +22,8 @@ public static class SqlTokenizer
     public static List<SqlToken> Tokenize(string sql, DbKind dialect = DbKind.Postgres)
     {
         bool mysql = dialect == DbKind.MySql;
+        // $$…$$ strings are PostgreSQL's (and DuckDB's); in MySQL $$ is the usual DELIMITER of procedure scripts.
+        bool dollarQuotes = dialect is DbKind.Postgres or DbKind.DuckDb;
         var list = new List<SqlToken>(sql.Length / 4);
         int i = 0, n = sql.Length;
         while (i < n)
@@ -69,7 +71,7 @@ public static class SqlTokenizer
                 i = close < 0 ? n : close + 1;
                 kind = SqlTokenKind.QuotedIdentifier;
             }
-            else if (c == '$' && DollarTag(sql, i) is { } tag)
+            else if (c == '$' && dollarQuotes && DollarTag(sql, i) is { } tag)
             {
                 int close = sql.IndexOf(tag, i + tag.Length, StringComparison.Ordinal);
                 i = close < 0 ? n : close + tag.Length;

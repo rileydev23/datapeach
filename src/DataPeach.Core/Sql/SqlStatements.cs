@@ -12,7 +12,7 @@ public static class SqlStatements
     /// Statements separated by ';' (outside strings and comments), trimmed, without the ';'. Statements made only of
     /// comments and blanks are left out. Their tools add a separator line: GO in SQL Server and / in Oracle. A block
     /// with ';' inside (a procedure, trigger or function in SQL Server; PL/SQL in Oracle) only ends at that line, and
-    /// keeps its ';'.
+    /// keeps its ';'. MySQL scripts change the separator with a "DELIMITER $$" line, as its command-line client does.
     /// </summary>
     public static List<SqlStatement> Split(string sql, DbKind kind = DbKind.Postgres)
     {
@@ -20,6 +20,8 @@ public static class SqlStatements
         var tokens = SqlTokenizer.Tokenize(sql, kind);
         int first = -1, last = -1;
         bool block = false;
+        string? delimiter = null; // MySQL: the one set by DELIMITER, when it is not ';'
+        int skipTo = -1;
         void Flush()
         {
             if (first >= 0)
@@ -32,8 +34,34 @@ public static class SqlStatements
         for (int i = 0; i < tokens.Count; i++)
         {
             var t = tokens[i];
+            if (t.Start < skipTo) continue;
             if (IsSeparatorLine(sql, t, kind)) { Flush(); continue; }
-            if (t.Kind == SqlTokenKind.Punctuation && sql[t.Start] == ';' && !block) { Flush(); continue; }
+            if (kind == DbKind.MySql && DelimiterLine(sql, t) is { } d)
+            {
+                Flush();
+                delimiter = d.Delimiter == ";" ? null : d.Delimiter;
+                skipTo = d.LineEnd;
+                continue;
+            }
+            if (delimiter is not null)
+            {
+                // It may be glued to a word ("END$$": '$' is a word character), so look inside the token too.
+                int at = t.Kind is SqlTokenKind.String or SqlTokenKind.Comment or SqlTokenKind.QuotedIdentifier
+                    ? -1
+                    : sql.IndexOf(delimiter, t.Start, Math.Max(t.Length, Math.Min(delimiter.Length, sql.Length - t.Start)), StringComparison.Ordinal);
+                if (at >= 0)
+                {
+                    if (at > t.Start)
+                    {
+                        if (first < 0) first = t.Start;
+                        last = at;
+                    }
+                    Flush();
+                    skipTo = at + delimiter.Length;
+                    continue;
+                }
+            }
+            else if (t.Kind == SqlTokenKind.Punctuation && sql[t.Start] == ';' && !block) { Flush(); continue; }
             if (t.Kind is SqlTokenKind.Whitespace) continue;
             if (t.Kind is SqlTokenKind.Comment && first < 0) continue; // comments before a statement are not part of it
             if (first < 0)
@@ -50,12 +78,25 @@ public static class SqlStatements
 
     private static bool IsSeparatorLine(string sql, SqlToken t, DbKind kind)
     {
-        var sep = kind switch { DbKind.SqlServer => "GO", DbKind.Oracle => "/", _ => null };
+        var sep = kind switch { DbKind.SqlServer or DbKind.Sybase => "GO", DbKind.Oracle => "/", _ => null };
         if (sep is null || t.Length != sep.Length || t.Kind is SqlTokenKind.String or SqlTokenKind.QuotedIdentifier or SqlTokenKind.Comment
             || !t.Text(sql).Equals(sep, StringComparison.OrdinalIgnoreCase)) return false;
         for (int i = t.Start - 1; i >= 0 && sql[i] != '\n'; i--) if (!char.IsWhiteSpace(sql[i])) return false;
         for (int i = t.End; i < sql.Length && sql[i] != '\n'; i++) if (!char.IsWhiteSpace(sql[i])) return false;
         return true;
+    }
+
+    /// <summary>A "DELIMITER x" line starting at token <paramref name="t"/>: the new delimiter and where the line ends.</summary>
+    private static (string Delimiter, int LineEnd)? DelimiterLine(string sql, SqlToken t)
+    {
+        if (t.Kind is not (SqlTokenKind.Keyword or SqlTokenKind.Identifier) || !t.Text(sql).Equals("DELIMITER", StringComparison.OrdinalIgnoreCase)) return null;
+        for (int i = t.Start - 1; i >= 0 && sql[i] != '\n'; i--) if (!char.IsWhiteSpace(sql[i])) return null;
+        int end = sql.IndexOf('\n', t.End);
+        if (end < 0) end = sql.Length;
+        var rest = sql[t.End..end].Trim();
+        int space = rest.IndexOfAny(new[] { ' ', '\t' });
+        var d = space < 0 ? rest : rest[..space];
+        return d.Length == 0 ? null : (d, end);
     }
 
     private static readonly HashSet<string> BlockObjects = new(StringComparer.OrdinalIgnoreCase)
@@ -66,7 +107,7 @@ public static class SqlStatements
     /// <summary>Whether the statement starting at token <paramref name="at"/> is a block that holds its own ';'.</summary>
     private static bool StartsBlock(string sql, List<SqlToken> tokens, int at, DbKind kind)
     {
-        if (kind is not (DbKind.SqlServer or DbKind.Oracle)) return false;
+        if (kind is not (DbKind.SqlServer or DbKind.Sybase or DbKind.Oracle)) return false;
         var words = new List<string>(6);
         for (int i = at; i < tokens.Count && words.Count < 6; i++)
         {

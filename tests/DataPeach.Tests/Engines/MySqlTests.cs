@@ -22,6 +22,20 @@ public class MySqlTests : EngineTests
                       UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)
         SELECT i, CONCAT('user ', i) FROM (SELECT a.n * 1000 + b.n * 100 + c.n * 10 + e.n + 1 AS i FROM d a, d b, d c, d e) x WHERE i <= 3000;
         """;
+
+    // The compose file sets log_bin_trust_function_creators, so a user without SUPER may create functions.
+    protected override string? RoutineSetup => """
+        DROP FUNCTION IF EXISTS add_one;
+        CREATE FUNCTION add_one(x INT) RETURNS INT DETERMINISTIC RETURN x + 1;
+        DROP PROCEDURE IF EXISTS touch_user;
+        DELIMITER $$
+        CREATE PROCEDURE touch_user(IN id INT, OUT n INT)
+        BEGIN
+            UPDATE users SET active = 0 WHERE users.id = id;
+            SET n = ROW_COUNT();
+        END$$
+        DELIMITER ;
+        """;
 }
 
 /// <summary>MariaDB speaks the MySQL protocol: same driver and dialect.</summary>

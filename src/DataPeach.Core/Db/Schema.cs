@@ -2,7 +2,8 @@ namespace DataPeach.Core.Db;
 
 public enum DbObjectKind { Table, View }
 
-public sealed record DbColumn(string Name, string DataType, bool Nullable, bool IsPrimaryKey, string? Default);
+/// <summary>A column; <see cref="IsIdentity"/> marks the ones the server numbers itself (SQL Server and SAP ASE).</summary>
+public sealed record DbColumn(string Name, string DataType, bool Nullable, bool IsPrimaryKey, string? Default, bool IsIdentity = false);
 
 /// <summary>A table or view with its columns. <see cref="Schema"/> is null where the engine has none (SQLite).</summary>
 public sealed class DbTable
@@ -30,6 +31,8 @@ public sealed class SchemaSnapshot
     public List<DbTable> Tables { get; init; } = new();
     /// <summary>Schema that unqualified names resolve to ("public", the current database…).</summary>
     public string? DefaultSchema { get; init; }
+    /// <summary>Stored procedures and functions, loaded with the tables.</summary>
+    public List<DbRoutine> Routines { get; init; } = new();
 
     public static readonly SchemaSnapshot Empty = new();
 
@@ -53,4 +56,32 @@ public sealed class TableDetails
 {
     public List<DbIndex> Indexes { get; } = new();
     public List<DbForeignKey> ForeignKeys { get; } = new();
+}
+
+public enum DbRoutineKind { Procedure, Function }
+
+public enum ParamDirection { In, Out, InOut }
+
+public sealed record DbParameter(string Name, string DataType, ParamDirection Direction);
+
+/// <summary>
+/// A stored procedure or function. <see cref="Id"/> tells overloads apart (PostgreSQL); <see cref="ReturnType"/> is
+/// null for procedures, and "TABLE" when a function returns rows.
+/// </summary>
+public sealed class DbRoutine
+{
+    public string? Schema { get; init; }
+    public required string Name { get; init; }
+    public DbRoutineKind Kind { get; init; }
+    public string? ReturnType { get; init; }
+    public bool ReturnsTable { get; init; }
+    public string? Id { get; init; }
+    public List<DbParameter> Parameters { get; init; } = new();
+
+    public string Display => Schema is null ? Name : $"{Schema}.{Name}";
+    /// <summary>"(a int, b text)": what tells two overloads apart in the tree.</summary>
+    public string Signature => "(" + string.Join(", ", Parameters.Where(p => p.Direction != ParamDirection.Out || Kind == DbRoutineKind.Procedure)
+        .Select(p => ((p.Direction == ParamDirection.In ? "" : p.Direction.ToString().ToUpperInvariant() + " ") + p.Name + " " + p.DataType).Trim())) + ")";
+
+    public override string ToString() => Display;
 }

@@ -26,6 +26,10 @@ work with just what it needs:
   in a **staging** panel as the exact SQL that will run, and are applied together in one transaction.
 - **Care per connection.** Mark a connection as **production** (everything that writes asks first) or
   **read-only** (nothing that writes runs).
+- **Deleting can be undone.** Every `DELETE` or `TRUNCATE` asks first with the rows it will remove, keeps them in a
+  **delete history** (30 days by default) and gives you the script that puts them back.
+- **Stored procedures and functions** on every engine that has them: open their code as a script that recreates
+  them, run them with a parameter form (OUT ones included) and script their `DROP`.
 - **Consoles are files.** Every console is a `.sql` file saved as you type. Pick a project folder and they go to
   `.peach/queries/`, ready to version and share with git.
 - **Drivers on demand.** The exe ships no drivers: each engine's official package is downloaded from nuget.org the
@@ -42,6 +46,7 @@ It belongs to the **Peach** family, with GitPeach and TextPeach: same colors, sh
 | MySQL / MariaDB | MySqlConnector | ~1 MB |
 | SQL Server | Microsoft.Data.SqlClient | ~5 MB |
 | Oracle | Oracle.ManagedDataAccess.Core | ~8 MB |
+| SAP ASE (Sybase) | AdoNetCore.AseClient | ~0.4 MB |
 | DuckDB | DuckDB.NET.Data.Full | ~36 MB (a one-time ~110 MB download) |
 
 All of them are tested against real servers. Redis is planned.
@@ -50,9 +55,21 @@ All of them are tested against real servers. Redis is planned.
   (Docker, development) needs `TrustServerCertificate=True` in the options. Scripts may separate batches with `GO` lines.
 - **Oracle:** the database field is the service name (`FREEPDB1`, `ORCLPDB1`…). PL/SQL blocks end with a `/` line,
   as in SQL\*Plus.
+- **SAP ASE (Sybase):** port 5000 by default; object owners (`dbo`…) show as schemas. Scripts separate batches with
+  `GO`, as in `isql`. It has no read-only session: there only the app stops writes, as with SQL Server.
+- **MySQL / MariaDB:** procedure scripts may use `DELIMITER $$`, as in the `mysql` client.
 - **DuckDB:** the file opens like a SQLite one (drag it or use *Open file*); the engine is told by the content, not the
   extension. A file written by a DuckDB newer than the driver's will not open until a new DuckDB.NET ships (pick it in
   *Drivers*).
+
+## Delete history
+
+Before a console `DELETE`, DataPeach reads the same rows (same `WHERE`, same transaction) and then saves them in the
+settings folder, under `history/`. It backs up `DELETE FROM table [WHERE …]` and `TRUNCATE`; a `DELETE` with `USING`,
+`JOIN`, `RETURNING` or a CTE still runs after confirming, but the confirmation says those rows are not kept. Up to
+100,000 rows are kept per delete. Staging deletes are always kept. The inverse script is one `INSERT` per row (with
+`IDENTITY_INSERT` on SQL Server and SAP ASE when needed), and restoring asks again. How long deletes are kept (7, 30,
+90 days or always) is chosen in the history itself, from the **Deletes** button of a connection.
 
 ## Getting started
 
@@ -80,7 +97,7 @@ All of them are tested against real servers. Redis is planned.
 
 No accounts, no telemetry; the only internet access is downloading drivers from nuget.org when you ask. Everything
 lives in `%APPDATA%\peachapps\DataPeach\`: `state.json` (connections, no passwords), `secrets.json` (passwords
-encrypted with DPAPI), `drivers\` and `queries\`. With a `portable.txt` next to the exe it all goes to `.\data\`.
+encrypted with DPAPI), `drivers\`, `queries\` and `history\` (deleted rows, plain text like the consoles). With a `portable.txt` next to the exe it all goes to `.\data\`.
 
 ## Building
 

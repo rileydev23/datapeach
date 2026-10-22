@@ -44,6 +44,8 @@ DataPeach hace lo que se usa todos los días con lo justo:
   transacción.
 - **Cuidado por conexión.** Marca una conexión como **producción** (todo lo que escribe pide confirmación) o
   **solo lectura** (no se ejecuta nada que escriba).
+- **Borrar tiene vuelta atrás.** Cada `DELETE` o `TRUNCATE` pide confirmación con las filas que va a quitar, las
+  guarda en un **historial de borrados** (30 días por defecto) y te da el script que las devuelve.
 - **Consolas como archivos.** Cada consola es un `.sql` que se guarda solo. Elige una carpeta de proyecto y van a
   `.peach/queries/`, listas para versionar y compartir con git.
 - **Drivers a demanda.** El exe no trae drivers: el paquete oficial de cada motor se descarga de nuget.org la
@@ -56,8 +58,12 @@ colores, atajos y forma de trabajar.
 
 - Home de conexiones con grupos, favoritos, filtro y búsqueda rápida (`Ctrl+Shift+O`).
 - Arrastra un archivo `.db` / `.sqlite` a la ventana y se abre al instante.
-- Árbol de estructura (esquemas, tablas, vistas, columnas con su tipo y clave primaria) con filtro, y panel de
-  detalle con índices y claves foráneas.
+- Árbol de estructura (esquemas, tablas, vistas, columnas con su tipo y clave primaria, procedimientos y
+  funciones) con filtro, y panel de detalle con índices, claves foráneas y parámetros.
+- Procedimientos almacenados y funciones en todos los motores que los tienen: abrir su código como un script que
+  los recrea, ejecutarlos con un formulario de parámetros (incluidos los de salida) y generar su `DROP`.
+- Historial de borrados por conexión, con el SQL que se ejecutó, las filas que quitó y su script inverso:
+  restaurar (en una transacción y con confirmación), abrirlo en una consola para ajustarlo o copiarlo.
 - Consolas SQL con colores, autocompletado de tablas, columnas y alias, `Ctrl+Enter` para la sentencia del
   cursor, varios resultados por ejecución y cancelación con `Esc`.
 - Datos de una tabla con filtros `WHERE` y `ORDER BY`, de a 1.000 filas.
@@ -76,6 +82,7 @@ colores, atajos y forma de trabajar.
 | MySQL / MariaDB | MySqlConnector | ~1 MB |
 | SQL Server | Microsoft.Data.SqlClient | ~5 MB |
 | Oracle | Oracle.ManagedDataAccess.Core | ~8 MB |
+| SAP ASE (Sybase) | AdoNetCore.AseClient | ~0,4 MB |
 | DuckDB | DuckDB.NET.Data.Full | ~36 MB (se descargan ~110 MB una vez) |
 
 Todos están probados contra servidores reales (ver [Probar contra servidores reales](#probar-contra-servidores-reales)).
@@ -85,6 +92,10 @@ Redis está planeado.
   necesita `TrustServerCertificate=True` en las opciones. Los scripts pueden separar lotes con líneas `GO`.
 - **Oracle:** el campo base de datos es el nombre del servicio (`FREEPDB1`, `ORCLPDB1`…). Los bloques PL/SQL terminan
   con una línea `/`, como en SQL\*Plus.
+- **SAP ASE (Sybase):** puerto 5000 por defecto; los dueños de los objetos (`dbo`…) se muestran como esquemas. Los
+  scripts separan lotes con `GO`, como en `isql`. No tiene sesión de solo lectura: ahí solo frena la app, como en
+  SQL Server.
+- **MySQL / MariaDB:** los scripts de procedimientos pueden usar `DELIMITER $$`, como en el cliente `mysql`.
 - **DuckDB:** el archivo se abre como uno de SQLite (arrastrándolo o con *Abrir archivo*); el motor se reconoce por el
   contenido, no por la extensión. Un archivo creado con un DuckDB más nuevo que el del driver no abre hasta que salga
   una versión nueva de DuckDB.NET (se elige en *Drivers*).
@@ -113,6 +124,13 @@ ejecútalo. Es un único archivo, sin instalador.
 - **Producción y solo lectura.** Qué sentencias "escriben" se decide de forma conservadora: lo que no se
   reconoce como lectura cuenta como escritura. En solo lectura la sesión además se abre en modo lectura cuando el
   motor lo permite.
+- **Historial de borrados.** Antes de un `DELETE` de la consola, DataPeach lee las mismas filas (con el mismo
+  `WHERE`, en la misma transacción) y después las guarda en la carpeta de configuración, en `history/`. Respalda
+  `DELETE FROM tabla [WHERE …]` y `TRUNCATE`; un `DELETE` con `USING`, `JOIN`, `RETURNING` o un CTE se ejecuta igual
+  tras confirmar, pero la confirmación avisa que esas filas no se guardan. Se respaldan hasta 100.000 filas por
+  borrado. Los borrados del staging se guardan siempre. El script inverso son `INSERT` fila por fila (con
+  `IDENTITY_INSERT` en SQL Server y SAP ASE cuando hace falta) y restaurar vuelve a pedir confirmación. Cuánto
+  tiempo se guardan (7, 30, 90 días o siempre) se elige en el mismo historial.
 - **Drivers.** Desde **Drivers...** ves qué hay instalado, actualizas, eliges otra versión de nuget.org o quitas
   uno. Cada driver se carga aislado del resto.
 
@@ -137,7 +155,8 @@ Los detalles están en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y el diseño
 
 DataPeach no tiene cuentas ni telemetría y solo se conecta a internet para descargar drivers de nuget.org cuando
 se lo pides. Todo se guarda en `%APPDATA%\peachapps\DataPeach\` (en Linux, `~/.config/peachapps/DataPeach/`):
-`state.json` (conexiones, sin contraseñas), `secrets.json` (contraseñas cifradas), `drivers\` y `queries\`.
+`state.json` (conexiones, sin contraseñas), `secrets.json` (contraseñas cifradas), `drivers\`, `queries\` e
+`history\` (las filas borradas, en texto plano como las consolas).
 Con un archivo `portable.txt` junto al exe, todo eso queda en `.\data\`.
 
 ## Límites conocidos
@@ -145,7 +164,13 @@ Con un archivo `portable.txt` junto al exe, todo eso queda en `.\data\`.
 - Hasta 50.000 filas por resultado de consola (se indica "(limitado)").
 - Una tabla sin clave primaria se ve pero no se edita.
 - Sin túneles SSH, ERD ni plan de ejecución visual todavía.
-- SQL Server y Oracle no tienen sesión de solo lectura: ahí el modo *Solo lectura* lo impone la app, no el servidor.
+- SQL Server, Oracle y SAP ASE no tienen sesión de solo lectura: ahí el modo *Solo lectura* lo impone la app, no el
+  servidor.
+- El historial de borrados respalda `DELETE` sobre una tabla (con o sin `WHERE`) y `TRUNCATE`, hasta 100.000 filas;
+  `DROP TABLE` no se respalda. Restaurar inserta las filas tal cual: columnas `GENERATED ALWAYS` (PostgreSQL,
+  Oracle) necesitan ajustar el script en la consola.
+- En Oracle, los parámetros OUT de un procedimiento quedan en variables del bloque generado (DataPeach no muestra
+  `DBMS_OUTPUT`).
 - Las pruebas contra servidores reales corren en local con Docker, todavía no en CI.
 
 ## Compilar desde el código

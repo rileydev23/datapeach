@@ -123,6 +123,13 @@ public sealed class DbSession : IAsyncDisposable
         return await Dialect.LoadDetailsAsync(c, t, ct);
     }
 
+    /// <summary>Every foreign key of the database, read apart from the structure so the tree never waits for them.</summary>
+    public async Task<List<DbForeignKey>> LoadForeignKeysAsync(CancellationToken ct)
+    {
+        await using var c = await NewConnectionAsync(ct);
+        return await Dialect.LoadForeignKeysAsync(c, null, ct);
+    }
+
     /// <summary>
     /// Runs one statement on the main connection and streams its output to <paramref name="sink"/> in batches: the
     /// first rows go out at once so they show up immediately, then about every 100 ms. Reading stops after

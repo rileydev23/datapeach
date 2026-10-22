@@ -126,6 +126,13 @@
                   <Button Classes="flat" Content="✕" Command="{Binding CloseCommand}" FontSize="9" Padding="4,1" Foreground="#8a8d93" ToolTip.Tip="{l:L main.close.tip}" />
                 </StackPanel>
               </DataTemplate>
+              <DataTemplate DataType="vm:DiagramViewModel" x:DataType="vm:DiagramViewModel">
+                <StackPanel Orientation="Horizontal" Margin="10,5,4,5" Spacing="6" ToolTip.Tip="{Binding ToolTip}">
+                  <TextBlock Text="◇" Foreground="#9a7ae0" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" />
+                  <Button Classes="flat" Content="✕" Command="{Binding CloseCommand}" FontSize="9" Padding="4,1" Foreground="#8a8d93" ToolTip.Tip="{l:L main.close.tip}" />
+                </StackPanel>
+              </DataTemplate>
             </ListBox.DataTemplates>
           </ListBox>
         </Border>
@@ -133,6 +140,7 @@
           <ContentControl.DataTemplates>
             <DataTemplate DataType="vm:ConsoleViewModel"><views:ConsoleView /></DataTemplate>
             <DataTemplate DataType="vm:TableDataViewModel"><views:TableDataView /></DataTemplate>
+            <DataTemplate DataType="vm:DiagramViewModel"><views:DiagramView /></DataTemplate>
           </ContentControl.DataTemplates>
         </ContentControl>
       </DockPanel>

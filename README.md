@@ -77,6 +77,11 @@ colores, atajos y forma de trabajar.
 </p>
 
 <p align="center">
+  <img src="docs/img/diagram.png" alt="Diagrama alrededor de la tabla pedidos, con sus claves foráneas resaltadas" /><br/>
+  <sub><b>Diagrama:</b> una tabla y las que están a uno o más pasos, o toda la base, con sus claves foráneas.</sub>
+</p>
+
+<p align="center">
   <img src="docs/img/about.png" width="420" alt="Acerca de DataPeach, con los atajos de teclado y el selector de idioma" /><br/>
   <sub><b>Acerca de (F1):</b> versión, atajos de teclado, idioma y carpeta de configuración.</sub>
 </p>
@@ -96,6 +101,8 @@ colores, atajos y forma de trabajar.
 - Consolas SQL con colores, autocompletado de tablas, columnas y alias, `Ctrl+Enter` para la sentencia del
   cursor, varios resultados por ejecución y cancelación con `Esc`.
 - Datos de una tabla con filtros `WHERE` y `ORDER BY`, de a 1.000 filas.
+- Diagrama de relaciones: las tablas de una base o un esquema con sus claves foráneas, o una tabla y las que están
+  a uno, dos o más pasos de ella. Se acomoda solo; arrastra las tablas para moverlas y doble clic abre sus datos.
 - Edición en la rejilla con staging: celdas editadas en ámbar, filas nuevas en verde, filas a borrar en rojo, y
   el SQL de cada cambio con su botón para deshacerlo.
 - Copiar y exportar a CSV, TSV, JSON, tabla Markdown, sentencias INSERT e interfaces TypeScript.

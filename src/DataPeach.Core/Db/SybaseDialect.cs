@@ -123,22 +123,23 @@ public sealed class SybaseDialect : Dialect
                      ORDER BY 1
                      """, ct, args))
             d.Indexes.Add(new DbIndex(S(r[0]), B(r[1]), "(" + string.Join(", ", r.Skip(2).TakeWhile(x => x is not null).Select(S)) + ")"));
+        d.ForeignKeys.AddRange(await LoadForeignKeysAsync(c, t, ct));
+        return d;
+    }
 
+    /// <summary>sysreferences holds a key in one row, with its columns in fokey1..16 and refkey1..16.</summary>
+    public override async Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct)
+    {
         var fo = string.Join(", ", Enumerable.Range(1, 16).Select(n => $"col_name(r.tableid, r.fokey{n})"));
         var re = string.Join(", ", Enumerable.Range(1, 16).Select(n => $"col_name(r.reftabid, r.refkey{n})"));
-        foreach (var r in await QueryAsync(c, $"""
-                     SELECT object_name(r.constrid), r.keycnt, user_name(rt.uid) + '.' + rt.name, {fo}, {re}
-                     FROM sysreferences r, sysobjects o, sysobjects rt
-                     WHERE o.id = r.tableid AND rt.id = r.reftabid AND o.name = @t AND user_name(o.uid) = @s
-                     ORDER BY 1
-                     """, ct, args))
-        {
-            int n = Convert.ToInt32(r[1], CultureInfo.InvariantCulture);
-            var from = string.Join(", ", r.Skip(3).Take(n).Select(S));
-            var to = string.Join(", ", r.Skip(19).Take(n).Select(S));
-            d.ForeignKeys.Add(new DbForeignKey(S(r[0]), $"({from}) → {S(r[2])} ({to})"));
-        }
-        return d;
+        var rows = await QueryAsync(c, $"""
+            SELECT user_name(o.uid), o.name, object_name(r.constrid), r.keycnt, user_name(rt.uid), rt.name, {fo}, {re}
+            FROM sysreferences r, sysobjects o, sysobjects rt
+            WHERE o.id = r.tableid AND rt.id = r.reftabid {(t is null ? "" : "AND o.name = @t AND user_name(o.uid) = @s")}
+            ORDER BY 1, 2, 3
+            """, ct, t is null ? [] : [("@s", t.Schema), ("@t", t.Name)]);
+        return DbForeignKey.FromRows(rows.SelectMany(r => Enumerable.Range(0, Convert.ToInt32(r[3], CultureInfo.InvariantCulture))
+            .Select(i => new[] { S(r[0]), S(r[1]), S(r[2]), S(r[6 + i]), S(r[4]), S(r[5]), S(r[22 + i]) })));
     }
 
     // ------------------------------------------------------------------ routines

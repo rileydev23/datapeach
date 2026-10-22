@@ -67,7 +67,41 @@ public sealed class SchemaSnapshot
 public sealed record DbDatabase(string Name, bool IsSystem);
 
 public sealed record DbIndex(string Name, bool Unique, string Definition);
-public sealed record DbForeignKey(string Name, string Definition);
+/// <summary>
+/// A foreign key of <see cref="Schema"/>.<see cref="Table"/>: its <see cref="Columns"/> point, pair by pair, at the
+/// <see cref="RefColumns"/> of <see cref="RefSchema"/>.<see cref="RefTable"/>. Schemas are null where the engine has
+/// none (SQLite).
+/// </summary>
+public sealed record DbForeignKey(string Name, string? Schema, string Table, IReadOnlyList<string> Columns,
+                                  string? RefSchema, string RefTable, IReadOnlyList<string> RefColumns)
+{
+    /// <summary>"(user_id) → users (id)": the referenced schema shows only when it is not the table's own.</summary>
+    public string Definition =>
+        $"({string.Join(", ", Columns)}) → {(RefSchema is null || RefSchema == Schema ? RefTable : RefSchema + "." + RefTable)} ({string.Join(", ", RefColumns)})";
+
+    /// <summary>
+    /// Builds the keys from one row per column pair — schema, table, key name, column, referenced schema, referenced
+    /// table, referenced column — ordered by table, key and position, which is how every engine reads them.
+    /// </summary>
+    public static List<DbForeignKey> FromRows(IEnumerable<string?[]> rows)
+    {
+        var keys = new List<DbForeignKey>();
+        List<string>? cols = null, refCols = null;
+        foreach (var r in rows)
+        {
+            var last = keys.Count > 0 ? keys[^1] : null;
+            if (last is null || last.Schema != r[0] || last.Table != r[1] || last.Name != r[2])
+            {
+                cols = new List<string>();
+                refCols = new List<string>();
+                keys.Add(new DbForeignKey(r[2] ?? "", r[0], r[1] ?? "", cols, r[4], r[5] ?? "", refCols));
+            }
+            cols!.Add(r[3] ?? "");
+            refCols!.Add(r[6] ?? "");
+        }
+        return keys;
+    }
+}
 
 /// <summary>What the detail panel shows besides the columns; loaded when a table is selected.</summary>
 public sealed class TableDetails

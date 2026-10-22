@@ -106,6 +106,13 @@ public abstract partial class Dialect
     public abstract Task<SchemaSnapshot> LoadSchemaAsync(DbConnection c, CancellationToken ct);
     public abstract Task<TableDetails> LoadDetailsAsync(DbConnection c, DbTable t, CancellationToken ct);
 
+    /// <summary>The foreign keys of <paramref name="t"/>, or of every table <see cref="LoadSchemaAsync"/> reads when null.</summary>
+    public abstract Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct);
+
+    /// <summary>Runs a query of one row per column pair (see <see cref="DbForeignKey.FromRows"/>) and builds the keys.</summary>
+    protected static async Task<List<DbForeignKey>> ForeignKeysAsync(DbConnection c, string sql, CancellationToken ct, params (string Name, object? Value)[] args) =>
+        DbForeignKey.FromRows((await QueryAsync(c, sql, ct, args)).Select(r => r.Select(v => v is null ? null : S(v)).ToArray()));
+
     // ------------------------------------------------------------------ databases
 
     /// <summary>
@@ -224,10 +231,11 @@ public sealed partial class PostgresDialect : Dialect
         return (all, current);
     }
 
+    // crdb_internal and pg_extension: CockroachDB's own schemas.
+    private const string Filter = "n.nspname NOT IN ('pg_catalog','information_schema','crdb_internal','pg_extension') AND n.nspname NOT LIKE 'pg\\_toast%' AND n.nspname NOT LIKE 'pg\\_temp%'";
+
     public override async Task<SchemaSnapshot> LoadSchemaAsync(DbConnection c, CancellationToken ct)
     {
-        // crdb_internal and pg_extension: CockroachDB's own schemas.
-        const string Filter = "n.nspname NOT IN ('pg_catalog','information_schema','crdb_internal','pg_extension') AND n.nspname NOT LIKE 'pg\\_toast%' AND n.nspname NOT LIKE 'pg\\_temp%'";
         var schemas = (await QueryAsync(c, $"SELECT n.nspname FROM pg_namespace n WHERE {Filter} ORDER BY 1", ct)).Select(r => S(r[0])).ToList();
         var current = (await QueryAsync(c, "SELECT current_schema()", ct)).FirstOrDefault()?[0] as string;
         var rows = await QueryAsync(c, $"""
@@ -267,10 +275,26 @@ public sealed partial class PostgresDialect : Dialect
             var using_ = def.IndexOf(" USING ", StringComparison.Ordinal);
             d.Indexes.Add(new DbIndex(S(r[0]), B(r[1]), using_ >= 0 ? def[(using_ + 7)..] : def));
         }
-        foreach (var r in await QueryAsync(c, "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = CAST(@t AS regclass) AND contype = 'f' ORDER BY 1", ct, ("@t", name)))
-            d.ForeignKeys.Add(new DbForeignKey(S(r[0]), S(r[1])));
+        d.ForeignKeys.AddRange(await LoadForeignKeysAsync(c, t, ct));
         return d;
     }
+
+    /// <summary>conkey and confkey list the column numbers of both sides in the same order.</summary>
+    public override Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct) =>
+        ForeignKeysAsync(c, $"""
+            SELECT n.nspname, cl.relname, k.conname, a.attname, rn.nspname, rc.relname, ra.attname
+            FROM pg_constraint k
+            JOIN pg_class cl ON cl.oid = k.conrelid
+            JOIN pg_namespace n ON n.oid = cl.relnamespace
+            JOIN pg_class rc ON rc.oid = k.confrelid
+            JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+            CROSS JOIN LATERAL generate_subscripts(k.conkey, 1) AS s(i)
+            JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = k.conkey[s.i]
+            JOIN pg_attribute ra ON ra.attrelid = k.confrelid AND ra.attnum = k.confkey[s.i]
+            WHERE k.contype = 'f' AND cl.relispartition IS NOT TRUE
+              AND {(t is null ? Filter : "k.conrelid = CAST(@t AS regclass)")}
+            ORDER BY 1, 2, 3, s.i
+            """, ct, t is null ? [] : [("@t", Qualified(t))]);
 
     internal static SchemaSnapshot Build(List<string> schemas, string? current, List<object?[]> rows, Func<string, DbObjectKind> kind)
     {
@@ -358,16 +382,19 @@ public sealed partial class MySqlDialect : Dialect
             GROUP BY INDEX_NAME, NON_UNIQUE ORDER BY 1
             """, ct, args);
         foreach (var r in idx) d.Indexes.Add(new DbIndex(S(r[0]), B(r[1]), "(" + S(r[2]) + ")"));
-        var fks = await QueryAsync(c, """
-            SELECT CONSTRAINT_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', '),
-                   REFERENCED_TABLE_NAME, GROUP_CONCAT(REFERENCED_COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', ')
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_SCHEMA = @s AND TABLE_NAME = @t AND REFERENCED_TABLE_NAME IS NOT NULL
-            GROUP BY CONSTRAINT_NAME, REFERENCED_TABLE_NAME ORDER BY 1
-            """, ct, args);
-        foreach (var r in fks) d.ForeignKeys.Add(new DbForeignKey(S(r[0]), $"({S(r[1])}) → {S(r[2])} ({S(r[3])})"));
+        d.ForeignKeys.AddRange(await LoadForeignKeysAsync(c, t, ct));
         return d;
     }
+
+    /// <summary>Without a table: those of the current database, or of every user database when there is none.</summary>
+    public override Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct) =>
+        ForeignKeysAsync(c, $"""
+            SELECT TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_NAME, COLUMN_NAME, REFERENCED_TABLE_SCHEMA, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE REFERENCED_TABLE_NAME IS NOT NULL
+              AND {(t is null ? $"(TABLE_SCHEMA = DATABASE() OR (DATABASE() IS NULL AND TABLE_SCHEMA NOT IN {System}))" : "TABLE_SCHEMA = @s AND TABLE_NAME = @t")}
+            ORDER BY 1, 2, 3, ORDINAL_POSITION
+            """, ct, t is null ? [] : [("@s", t.Schema), ("@t", t.Name)]);
 }
 
 public sealed partial class SqliteDialect : Dialect
@@ -419,13 +446,22 @@ public sealed partial class SqliteDialect : Dialect
                      GROUP BY il.name, il."unique" ORDER BY 1
                      """, ct, ("@t", t.Name)))
             d.Indexes.Add(new DbIndex(S(r[0]), B(r[1]), "(" + S(r[2]) + ")"));
-        foreach (var r in await QueryAsync(c, """
-                     SELECT id, "table", group_concat("from", ', '), group_concat("to", ', ')
-                     FROM pragma_foreign_key_list(@t) GROUP BY id, "table" ORDER BY id
-                     """, ct, ("@t", t.Name)))
-            d.ForeignKeys.Add(new DbForeignKey("fk" + S(r[0]), $"({S(r[2])}) → {S(r[1])} ({S(r[3])})"));
+        d.ForeignKeys.AddRange(await LoadForeignKeysAsync(c, t, ct));
         return d;
     }
+
+    /// <summary>
+    /// Keys have no name in SQLite's catalog: "fk" and their number. "REFERENCES users" without columns points at the
+    /// primary key, whose column seq + 1 is the one paired with this one.
+    /// </summary>
+    public override Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct) =>
+        ForeignKeysAsync(c, $"""
+            SELECT NULL, m.name, 'fk' || f.id, f."from", NULL, f."table",
+                   COALESCE(f."to", (SELECT p.name FROM pragma_table_info(f."table") p WHERE p.pk = f.seq + 1))
+            FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+            WHERE m.type = 'table' AND {(t is null ? @"m.name NOT LIKE 'sqlite\_%' ESCAPE '\'" : "m.name = @t")}
+            ORDER BY m.name, f.id, f.seq
+            """, ct, t is null ? [] : [("@t", t.Name)]);
 }
 
 public sealed partial class SqlServerDialect : Dialect
@@ -527,21 +563,21 @@ public sealed partial class SqlServerDialect : Dialect
                      GROUP BY i.name, i.is_unique ORDER BY 1
                      """, ct, ("@t", name)))
             d.Indexes.Add(new DbIndex(S(r[0]), B(r[1]), "(" + S(r[2]) + ")"));
-        foreach (var r in await QueryAsync(c, """
-                     SELECT fk.name,
-                            STRING_AGG(pc.name, ', ') WITHIN GROUP (ORDER BY fkc.constraint_column_id),
-                            OBJECT_SCHEMA_NAME(fk.referenced_object_id) + '.' + OBJECT_NAME(fk.referenced_object_id),
-                            STRING_AGG(rc.name, ', ') WITHIN GROUP (ORDER BY fkc.constraint_column_id)
-                     FROM sys.foreign_keys fk
-                     JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
-                     JOIN sys.columns pc ON pc.object_id = fkc.parent_object_id AND pc.column_id = fkc.parent_column_id
-                     JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
-                     WHERE fk.parent_object_id = OBJECT_ID(@t)
-                     GROUP BY fk.name, fk.referenced_object_id ORDER BY 1
-                     """, ct, ("@t", name)))
-            d.ForeignKeys.Add(new DbForeignKey(S(r[0]), $"({S(r[1])}) → {S(r[2])} ({S(r[3])})"));
+        d.ForeignKeys.AddRange(await LoadForeignKeysAsync(c, t, ct));
         return d;
     }
+
+    public override Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct) =>
+        ForeignKeysAsync(c, $"""
+            SELECT OBJECT_SCHEMA_NAME(fk.parent_object_id), OBJECT_NAME(fk.parent_object_id), fk.name, pc.name,
+                   OBJECT_SCHEMA_NAME(fk.referenced_object_id), OBJECT_NAME(fk.referenced_object_id), rc.name
+            FROM sys.foreign_keys fk
+            JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+            JOIN sys.columns pc ON pc.object_id = fkc.parent_object_id AND pc.column_id = fkc.parent_column_id
+            JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+            WHERE {(t is null ? "fk.is_ms_shipped = 0" : "fk.parent_object_id = OBJECT_ID(@t)")}
+            ORDER BY 1, 2, 3, fkc.constraint_column_id
+            """, ct, t is null ? [] : [("@t", Qualified(t))]);
 }
 
 public sealed partial class OracleDialect : Dialect
@@ -586,10 +622,11 @@ public sealed partial class OracleDialect : Dialect
         END
         """;
 
+    // Schemas of real users, not the dozens Oracle maintains itself (SYS, XDB, MDSYS…).
+    private const string Owners = "SELECT username FROM all_users WHERE oracle_maintained = 'N'";
+
     public override async Task<SchemaSnapshot> LoadSchemaAsync(DbConnection c, CancellationToken ct)
     {
-        // Schemas of real users, not the dozens Oracle maintains itself (SYS, XDB, MDSYS…).
-        const string Owners = "SELECT username FROM all_users WHERE oracle_maintained = 'N'";
         var schemas = (await QueryAsync(c, Owners + " ORDER BY 1", ct)).Select(r => S(r[0])).ToList();
         var current = (await QueryAsync(c, "SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM dual", ct)).FirstOrDefault()?[0] as string;
         // DATA_DEFAULT is a LONG, which the driver does not read inline: defaults are left out.
@@ -618,21 +655,21 @@ public sealed partial class OracleDialect : Dialect
                      GROUP BY i.index_name, i.uniqueness ORDER BY 1
                      """, ct, args))
             d.Indexes.Add(new DbIndex(S(r[0]), B(r[1]), "(" + S(r[2]) + ")"));
-        foreach (var r in await QueryAsync(c, """
-                     SELECT k.constraint_name,
-                            LISTAGG(kc.column_name, ', ') WITHIN GROUP (ORDER BY kc.position),
-                            MAX(r.owner || '.' || r.table_name),
-                            LISTAGG(rc.column_name, ', ') WITHIN GROUP (ORDER BY rc.position)
-                     FROM all_constraints k
-                     JOIN all_cons_columns kc ON kc.owner = k.owner AND kc.constraint_name = k.constraint_name
-                     JOIN all_constraints r ON r.owner = k.r_owner AND r.constraint_name = k.r_constraint_name
-                     JOIN all_cons_columns rc ON rc.owner = r.owner AND rc.constraint_name = r.constraint_name AND rc.position = kc.position
-                     WHERE k.owner = :s AND k.table_name = :t AND k.constraint_type = 'R'
-                     GROUP BY k.constraint_name ORDER BY 1
-                     """, ct, args))
-            d.ForeignKeys.Add(new DbForeignKey(S(r[0]), $"({S(r[1])}) → {S(r[2])} ({S(r[3])})"));
+        d.ForeignKeys.AddRange(await LoadForeignKeysAsync(c, t, ct));
         return d;
     }
+
+    public override Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct) =>
+        ForeignKeysAsync(c, $"""
+            SELECT k.owner, k.table_name, k.constraint_name, kc.column_name, r.owner, r.table_name, rc.column_name
+            FROM all_constraints k
+            JOIN all_cons_columns kc ON kc.owner = k.owner AND kc.constraint_name = k.constraint_name
+            JOIN all_constraints r ON r.owner = k.r_owner AND r.constraint_name = k.r_constraint_name
+            JOIN all_cons_columns rc ON rc.owner = r.owner AND rc.constraint_name = r.constraint_name AND rc.position = kc.position
+            WHERE k.constraint_type = 'R'
+              AND {(t is null ? $"k.owner IN ({Owners}) AND k.table_name NOT LIKE 'BIN$%'" : "k.owner = :s AND k.table_name = :t")}
+            ORDER BY 1, 2, 3, kc.position
+            """, ct, t is null ? [] : [("s", t.Schema), ("t", t.Name)]);
 }
 
 public sealed partial class DuckDbDialect : Dialect
@@ -683,17 +720,17 @@ public sealed partial class DuckDbDialect : Dialect
                      WHERE database_name = current_database() AND schema_name = $s AND table_name = $t ORDER BY 1
                      """, ct, args))
             d.Indexes.Add(new DbIndex(S(r[0]), B(r[1]), "(" + S(r[2]).Trim('[', ']') + ")"));
-        foreach (var r in await QueryAsync(c, """
-                     SELECT constraint_name, constraint_text FROM duckdb_constraints()
-                     WHERE database_name = current_database() AND schema_name = $s AND table_name = $t AND constraint_type = 'FOREIGN KEY'
-                     ORDER BY constraint_index
-                     """, ct, args))
-        {
-            // "FOREIGN KEY (user_id) REFERENCES users(id)" → "(user_id) → users (id)", like the other engines.
-            var text = S(r[1]);
-            var m = System.Text.RegularExpressions.Regex.Match(text, @"^FOREIGN KEY\s*(\(.*?\))\s*REFERENCES\s*(.+?)\s*(\(.*\))\s*$");
-            d.ForeignKeys.Add(new DbForeignKey(S(r[0]), m.Success ? $"{m.Groups[1].Value} → {m.Groups[2].Value} {m.Groups[3].Value}" : text));
-        }
+        d.ForeignKeys.AddRange(await LoadForeignKeysAsync(c, t, ct));
         return d;
     }
+
+    /// <summary>A key references a table of its own schema; the column lists pair up by position.</summary>
+    public override Task<List<DbForeignKey>> LoadForeignKeysAsync(DbConnection c, DbTable? t, CancellationToken ct) =>
+        ForeignKeysAsync(c, $"""
+            SELECT schema_name, table_name, constraint_name, constraint_column_names[i], schema_name, referenced_table, referenced_column_names[i]
+            FROM (SELECT *, generate_subscripts(constraint_column_names, 1) AS i FROM duckdb_constraints()
+                  WHERE database_name = current_database() AND constraint_type = 'FOREIGN KEY'
+                    {(t is null ? "" : "AND schema_name = $s AND table_name = $t")})
+            ORDER BY 1, 2, 3, i
+            """, ct, t is null ? [] : [("s", t.Schema), ("t", t.Name)]);
 }

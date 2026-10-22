@@ -68,6 +68,24 @@ public sealed class SqliteSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ReadsEveryForeignKeyOfTheDatabase()
+    {
+        // A composite key, and one that names no columns: it points at the referenced table's primary key.
+        foreach (var sql in new[]
+                 {
+                     "CREATE TABLE lines (order_id INTEGER REFERENCES orders, n INTEGER, PRIMARY KEY (order_id, n))",
+                     "CREATE TABLE notes (order_id INTEGER, n INTEGER, body TEXT, FOREIGN KEY (order_id, n) REFERENCES lines (order_id, n))",
+                 })
+            await _s.RunAsync(sql, new Sink(), 10, CancellationToken.None);
+
+        var keys = await _s.LoadForeignKeysAsync(CancellationToken.None);
+        Assert.Equal(new[] { "(order_id) → orders (id)", "(order_id, n) → lines (order_id, n)", "(user_id) → users (id)" },
+                     keys.Select(k => k.Definition));
+        Assert.Equal(new[] { "lines", "notes", "orders" }, keys.Select(k => k.Table));
+        Assert.All(keys, k => Assert.Null(k.Schema));
+    }
+
+    [Fact]
     public void RecognizesTheFileByItsHeader()
     {
         // ".duckdb" is ignored: the header says SQLite. A file with other content is neither.

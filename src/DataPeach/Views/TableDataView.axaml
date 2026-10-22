@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:DataPeach.Services"
+             xmlns:vm="using:DataPeach.ViewModels"
+             xmlns:c="using:DataPeach.Controls"
+             x:Class="DataPeach.Views.TableDataView"
+             x:DataType="vm:TableDataViewModel">
+  <DockPanel>
+    <!-- Filter strip: WHERE and ORDER BY as typed SQL, like DataGrip -->
+    <Border DockPanel.Dock="Top" Background="#26272b" BorderBrush="#3a3c42" BorderThickness="0,0,0,1" Padding="8,5">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+          <Button Content="{l:L table.addRow}" Command="{Binding AddRowCommand}" IsVisible="{Binding CanEdit}" ToolTip.Tip="Alt+Insert" />
+          <Button Content="{l:L table.openInConsole}" Command="{Binding OpenInConsoleCommand}" />
+          <Button Classes="flat" Content="⋯" x:Name="ExportButton" ToolTip.Tip="{l:L console.export.tip}" Padding="8,2" />
+        </StackPanel>
+        <Grid ColumnDefinitions="Auto,2*,Auto,*,Auto">
+          <TextBlock Text="WHERE" Classes="mono dim" FontSize="11" VerticalAlignment="Center" Margin="2,0,6,0" />
+          <TextBox Grid.Column="1" x:Name="WhereBox" Text="{Binding Where}" Watermark="{l:L table.where.watermark}" Classes="mono" FontSize="12" />
+          <TextBlock Grid.Column="2" Text="ORDER BY" Classes="mono dim" FontSize="11" VerticalAlignment="Center" Margin="10,0,6,0" />
+          <TextBox Grid.Column="3" x:Name="OrderBox" Text="{Binding OrderBy}" Watermark="{l:L table.order.watermark}" Classes="mono" FontSize="12" />
+          <Button Grid.Column="4" Content="{l:L table.reload}" Command="{Binding LoadCommand}" Margin="6,0,0,0" ToolTip.Tip="{l:L table.reload.tip}" />
+        </Grid>
+      </DockPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Top" Background="#1e1f22" BorderBrush="#3a3c42" BorderThickness="0,0,0,1" Padding="10,3" IsVisible="{Binding ShowReadOnlyReason}">
+      <TextBlock Text="{Binding ReadOnlyReason}" Classes="dim" FontSize="12" FontStyle="Italic" />
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Background="#1e1f22" BorderBrush="#3a3c42" BorderThickness="0,1,0,0" Padding="10,3">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="flat" Content="{l:L table.loadMore}" Command="{Binding LoadMoreCommand}" IsVisible="{Binding HasMore}" Foreground="#4a90d9" Padding="4,0" />
+        <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" IsVisible="{Binding IsLoading}" Width="80" Height="6" Margin="8,0" />
+        <TextBlock Text="{Binding Status}" Classes="dim" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+    <Grid Background="#1b1c1f">
+      <c:ResultGrid x:Name="Grid" Source="{Binding Result}" IsVisible="{Binding Result.HasGrid, FallbackValue=False}" />
+      <SelectableTextBlock Text="{Binding Result.Error, FallbackValue=''}" Foreground="#e0645a" Classes="mono" FontSize="12" TextWrapping="Wrap" Margin="12,10"
+                           IsVisible="{Binding Result.HasError, FallbackValue=False}" />
+      <TextBlock Text="{l:L common.loading}" Classes="dim" Margin="12,10" IsVisible="{Binding Result, Converter={x:Static ObjectConverters.IsNull}}" />
+    </Grid>
+  </DockPanel>
+</UserControl>

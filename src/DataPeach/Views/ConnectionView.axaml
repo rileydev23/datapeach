@@ -1,0 +1,203 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:DataPeach.Services"
+             xmlns:vm="using:DataPeach.ViewModels"
+             xmlns:views="using:DataPeach.Views"
+             x:Class="DataPeach.Views.ConnectionView"
+             x:DataType="vm:ConnectionViewModel">
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+N" Command="{Binding NewConsoleCommand}" />
+    <KeyBinding Gesture="F5" Command="{Binding RefreshSchemaCommand}" />
+    <KeyBinding Gesture="F4" Command="{Binding OpenSelectedTableCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+K" Command="{Binding ApplyStagingCommand}" />
+  </UserControl.KeyBindings>
+  <DockPanel>
+    <!-- Toolbar -->
+    <Border DockPanel.Dock="Top" Background="#26272b" BorderBrush="#3a3c42" BorderThickness="0,0,0,1" Padding="8,6">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+          <TextBlock Text="{Binding ServerVersion}" Foreground="{Binding EngineBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Button Content="{l:L cv.newConsole}" Command="{Binding NewConsoleCommand}" ToolTip.Tip="Ctrl+N" />
+          <Button Content="{l:L cv.openConsole}" Command="{Binding OpenConsoleFileCommand}" ToolTip.Tip="{l:L cv.openConsole.tip}" />
+          <Border Width="1" Background="#3a3c42" Margin="6,2" />
+          <Button Content="{l:L cv.openTable}" Command="{Binding OpenSelectedTableCommand}" ToolTip.Tip="F4" />
+          <Button Content="{l:L cv.refresh}" Command="{Binding RefreshSchemaCommand}" ToolTip.Tip="{l:L cv.refresh.tip}" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- Banners -->
+    <Border DockPanel.Dock="Top" Background="#5a4318" Padding="10,5" IsVisible="{Binding IsProduction}">
+      <TextBlock Text="{l:L cv.banner.production}" Foreground="#f0c890" FontWeight="SemiBold" TextWrapping="Wrap" />
+    </Border>
+    <Border DockPanel.Dock="Top" Background="#25364d" Padding="10,5" IsVisible="{Binding IsReadOnly}">
+      <TextBlock Text="{l:L cv.banner.readOnly}" FontWeight="SemiBold" TextWrapping="Wrap" />
+    </Border>
+    <Border DockPanel.Dock="Top" Background="#25364d" Padding="10,5" IsVisible="{Binding NeedsDriver}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="accent" Content="{l:L cv.downloadDriver}" Command="{Binding DownloadDriverCommand}" />
+        <StackPanel VerticalAlignment="Center" Spacing="2">
+          <TextBlock Text="{Binding DriverText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding DriverProgress}" Classes="dim" FontSize="12" TextWrapping="Wrap" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+    <Border DockPanel.Dock="Top" Background="#5a4318" Padding="10,5" IsVisible="{Binding HasConnectError}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{l:L cv.retry}" Command="{Binding RetryCommand}" BorderBrush="#8a6d1f" />
+        <SelectableTextBlock Text="{Binding ConnectError}" Foreground="#f0c890" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+
+    <!-- Status bar -->
+    <Border DockPanel.Dock="Bottom" Background="#18191c" BorderBrush="#3a3c42" BorderThickness="0,1,0,0" Padding="10,3">
+      <DockPanel>
+        <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Width="100" Height="6" Margin="10,0,0,0" />
+        <Button DockPanel.Dock="Right" Classes="flat" IsVisible="{Binding HasStaging}" Padding="4,0" x:Name="StagingStatus"
+                ToolTip.Tip="{l:L cv.staging.tip}">
+          <TextBlock Text="{Binding StagingTitle}" Foreground="#e0a24a" FontWeight="SemiBold" />
+        </Button>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="●" FontSize="9" Foreground="{Binding EngineBrush}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding EngineName}" VerticalAlignment="Center" />
+          <TextBlock Classes="dim" Text="{Binding Notice}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="8,0,0,0" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="260" MinWidth="160" />
+        <ColumnDefinition Width="4" />
+        <ColumnDefinition Width="*" MinWidth="360" />
+        <ColumnDefinition Width="4" />
+        <ColumnDefinition Width="300" MinWidth="200" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Schema tree -->
+      <Border Background="#222327">
+        <DockPanel>
+          <DockPanel DockPanel.Dock="Top" Margin="8,6">
+            <TextBlock Text="{l:L cv.schema}" Classes="section" />
+          </DockPanel>
+          <TextBox DockPanel.Dock="Top" x:Name="TreeFilterBox" Text="{Binding TreeFilter}" Watermark="{l:L cv.filter}" Margin="8,0,8,6" />
+          <ListBox x:Name="SchemaList" ItemsSource="{Binding SchemaRows}" SelectedItem="{Binding SelectedRow}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:SchemaRow">
+                <Grid ColumnDefinitions="Auto,16,18,*,Auto" Height="22" ToolTip.Tip="{Binding Tip}" Background="Transparent">
+                  <Border Width="0" Margin="{Binding Indent}" />
+                  <TextBlock Grid.Column="1" Text="{Binding Chevron}" Foreground="#8a8d93" FontSize="12" VerticalAlignment="Center" x:Name="Chevron" />
+                  <TextBlock Grid.Column="2" Text="{Binding Glyph}" Foreground="{Binding GlyphBrush}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Text="{Binding Text}" FontSize="12" FontStyle="{Binding Style}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="4" Text="{Binding Detail}" Classes="dim" FontSize="11" VerticalAlignment="Center" Margin="6,0,8,0" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
+
+      <!-- Consoles and tables -->
+      <DockPanel Grid.Column="2">
+        <Border DockPanel.Dock="Top" Background="#1e1f22" BorderBrush="#3a3c42" BorderThickness="0,0,0,1">
+          <ListBox x:Name="DocTabs" Classes="doctabs tabstrip" ItemsSource="{Binding Docs}" SelectedItem="{Binding SelectedDoc}">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.DataTemplates>
+              <DataTemplate DataType="vm:ConsoleViewModel" x:DataType="vm:ConsoleViewModel">
+                <StackPanel Orientation="Horizontal" Margin="10,5,4,5" Spacing="6" ToolTip.Tip="{Binding ToolTip}">
+                  <TextBlock Text="›_" Foreground="#d96a9b" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" />
+                  <TextBlock Text="●" Foreground="#6cc070" FontSize="9" IsVisible="{Binding IsRunning}" VerticalAlignment="Center" />
+                  <Button Classes="flat" Content="✕" Command="{Binding CloseCommand}" FontSize="9" Padding="4,1" Foreground="#8a8d93" ToolTip.Tip="{l:L main.close.tip}" />
+                </StackPanel>
+              </DataTemplate>
+              <DataTemplate DataType="vm:TableDataViewModel" x:DataType="vm:TableDataViewModel">
+                <StackPanel Orientation="Horizontal" Margin="10,5,4,5" Spacing="6" ToolTip.Tip="{Binding ToolTip}">
+                  <TextBlock Text="T" Foreground="#4ac7c0" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Title}" FontSize="12" VerticalAlignment="Center" />
+                  <Button Classes="flat" Content="✕" Command="{Binding CloseCommand}" FontSize="9" Padding="4,1" Foreground="#8a8d93" ToolTip.Tip="{l:L main.close.tip}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.DataTemplates>
+          </ListBox>
+        </Border>
+        <ContentControl Content="{Binding SelectedDoc}">
+          <ContentControl.DataTemplates>
+            <DataTemplate DataType="vm:ConsoleViewModel"><views:ConsoleView /></DataTemplate>
+            <DataTemplate DataType="vm:TableDataViewModel"><views:TableDataView /></DataTemplate>
+          </ContentControl.DataTemplates>
+        </ContentControl>
+      </DockPanel>
+      <GridSplitter Grid.Column="3" ResizeDirection="Columns" />
+
+      <!-- Details and staging -->
+      <Grid Grid.Column="4" Background="#222327" RowDefinitions="*,Auto">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="10,8" Spacing="6">
+            <TextBlock Text="{l:L cv.details}" Classes="section" />
+            <TextBlock Classes="dim" FontSize="12" Text="{l:L cv.details.empty}" IsVisible="{Binding !HasDetail}" TextWrapping="Wrap" />
+            <StackPanel Spacing="6" IsVisible="{Binding HasDetail}">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding DetailTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding DetailKind}" Classes="dim" FontSize="11" VerticalAlignment="Center" />
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding DetailColumns}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DetailLine">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,1">
+                      <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{Binding Brush}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1" Text="{Binding Value}" Classes="dim mono" FontSize="11" Margin="8,0,0,0" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <ItemsControl ItemsSource="{Binding DetailExtras}" Margin="0,6,0,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DetailLine">
+                    <StackPanel Margin="0,2">
+                      <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{Binding Brush}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Value}" Classes="dim mono" FontSize="11" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- Staging area (Propio de DataPeach) -->
+        <Border Grid.Row="1" BorderBrush="#3a3c42" BorderThickness="0,1,0,0" Background="#26272b" IsVisible="{Binding HasStaging}" x:Name="StagingPanel">
+          <DockPanel MaxHeight="420">
+            <DockPanel DockPanel.Dock="Top" Margin="10,8,10,4">
+              <Button DockPanel.Dock="Right" Classes="flat" Content="{l:L cv.staging.copy}" Command="{Binding CopyStagingCommand}" Foreground="#8a8d93" />
+              <TextBlock Text="{Binding StagingTitle}" Classes="section" Foreground="#e0a24a" />
+            </DockPanel>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="6" Margin="10,6,10,10">
+              <Button Classes="accent" Content="{l:L cv.staging.apply}" Command="{Binding ApplyStagingCommand}" ToolTip.Tip="Ctrl+Shift+K" />
+              <Button Content="{l:L cv.staging.discard}" Command="{Binding DiscardStagingCommand}" />
+            </StackPanel>
+            <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+              <ItemsControl ItemsSource="{Binding StagedItems}" Margin="10,0">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:StagedItem">
+                    <Grid ColumnDefinitions="14,*,Auto" Margin="0,3">
+                      <TextBlock Text="{Binding Letter}" Foreground="{Binding LetterBrush}" FontWeight="Bold" />
+                      <SelectableTextBlock Grid.Column="1" Text="{Binding Sql}" Classes="mono" FontSize="11" TextWrapping="Wrap" />
+                      <Button Grid.Column="2" Classes="flat" Content="↶" Command="{Binding RemoveCommand}" Foreground="#8a8d93" Padding="4,0" VerticalAlignment="Top"
+                              ToolTip.Tip="{l:L cv.staging.undo}" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </Grid>
+  </DockPanel>
+</UserControl>

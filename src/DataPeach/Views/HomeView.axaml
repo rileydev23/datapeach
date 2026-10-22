@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:DataPeach.Services"
+             xmlns:vm="using:DataPeach.ViewModels"
+             x:Class="DataPeach.Views.HomeView"
+             x:DataType="vm:HomeViewModel">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#26272b" BorderBrush="#3a3c42" BorderThickness="0,0,0,1" Padding="10">
+      <DockPanel LastChildFill="True">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6">
+          <Button Classes="accent" Content="{l:L home.add}" Command="{Binding AddCommand}" />
+          <Button Content="{l:L home.openFile}" Command="{Binding OpenFileCommand}" ToolTip.Tip="{l:L home.openFile.tip}" />
+          <Button Content="{l:L home.newGroup}" Command="{Binding NewGroupCommand}" />
+          <Button Content="{l:L home.drivers}" Command="{Binding DriversCommand}" ToolTip.Tip="{l:L home.drivers.tip}" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" Margin="6,0,0,0">
+          <Button Classes="flat" Content="{l:L home.expand}" Command="{Binding ExpandAllCommand}" ToolTip.Tip="{l:L home.expand.tip}" />
+          <Button Classes="flat" Content="{l:L home.collapse}" Command="{Binding CollapseAllCommand}" ToolTip.Tip="{l:L home.collapse.tip}" />
+          <ToggleButton Content="{l:L home.favorites}" IsChecked="{Binding OnlyFavorites}" />
+        </StackPanel>
+        <TextBox Text="{Binding Filter}" Watermark="{l:L home.filter}" Margin="12,0,0,0" x:Name="FilterBox" />
+      </DockPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Background="#18191c" BorderBrush="#3a3c42" BorderThickness="0,1,0,0" Padding="10,4">
+      <DockPanel>
+        <ProgressBar DockPanel.Dock="Right" IsIndeterminate="True" IsVisible="{Binding Busy}" Width="120" Height="6" />
+        <TextBlock DockPanel.Dock="Right" Classes="dim" Text="{l:L home.hint}" Margin="0,0,12,0" IsVisible="{Binding !Busy}" />
+        <TextBlock Classes="dim" Text="{Binding Status}" />
+      </DockPanel>
+    </Border>
+
+    <Grid>
+      <ListBox x:Name="ConnectionList" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}" SelectionMode="Multiple">
+        <ListBox.DataTemplates>
+          <DataTemplate DataType="vm:GroupHeaderRow" x:DataType="vm:GroupHeaderRow">
+            <Border Background="#222327" BorderBrush="#3a3c42" BorderThickness="0,1,0,1" Padding="4,2">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="flat" Content="{l:L home.openAll}" Command="{Binding OpenAllCommand}"
+                        IsVisible="{Binding CanOpenAll}" Foreground="#8a8d93" VerticalAlignment="Center"
+                        ToolTip.Tip="{l:L home.openAll.tip}" />
+                <Button Classes="flat" Command="{Binding ToggleCommand}" HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left" Padding="4,4">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding Chevron}" Width="14" FontSize="16" Foreground="#8a8d93" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding CountText}" Classes="dim" FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+              </DockPanel>
+            </Border>
+          </DataTemplate>
+          <DataTemplate DataType="vm:ConnectionRow" x:DataType="vm:ConnectionRow">
+            <Grid ColumnDefinitions="28,*,Auto" Margin="{Binding Pad}">
+              <TextBlock Text="★" Foreground="#e0a24a" IsVisible="{Binding Entry.Favorite}" VerticalAlignment="Center" />
+              <StackPanel Grid.Column="1" Spacing="2">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock Text="{Binding Entry.Name}" FontWeight="SemiBold" FontSize="14" />
+                  <TextBlock Text="{Binding Engine}" Foreground="{Binding EngineBrush}" VerticalAlignment="Center" />
+                  <Border Classes="envtag prod" IsVisible="{Binding IsProduction}" VerticalAlignment="Center">
+                    <TextBlock Text="{l:L conn.mode.production}" />
+                  </Border>
+                  <Border Classes="envtag ro" IsVisible="{Binding IsReadOnly}" VerticalAlignment="Center">
+                    <TextBlock Text="{l:L conn.mode.readonly}" />
+                  </Border>
+                  <TextBlock Text="{l:L home.missing}" Foreground="#e0645a" IsVisible="{Binding Entry.Missing}" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="{Binding Entry.Target}" Classes="dim" FontSize="12" />
+              </StackPanel>
+              <TextBlock Grid.Column="2" Classes="dim" VerticalAlignment="Center"
+                         Text="{Binding Entry.LastOpened, StringFormat='{}{0:yyyy-MM-dd HH:mm}'}" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.DataTemplates>
+      </ListBox>
+
+      <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="6" IsHitTestVisible="False"
+                  IsVisible="{Binding IsEmpty}">
+        <Image Source="/Assets/icon64.png" Width="64" Height="64" Opacity="0.85" Margin="0,0,0,8" />
+        <TextBlock Text="{l:L home.empty}" FontSize="16" HorizontalAlignment="Center" />
+        <TextBlock Classes="dim" Text="{l:L home.empty.hint}" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+  </DockPanel>
+</UserControl>

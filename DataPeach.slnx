@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DataPeach.Core/DataPeach.Core.csproj" />
+    <Project Path="src/DataPeach/DataPeach.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DataPeach.Tests/DataPeach.Tests.csproj" />
+  </Folder>
+</Solution>

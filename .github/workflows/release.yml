@@ -1,0 +1,71 @@
+# Publishing a release (from the draft kept by release-drafter.yml) builds DataPeach for Windows and Linux with the
+# release's version, checks that each build starts, and attaches them to the release.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write  # upload the builds to the release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test
+        run: dotnet test -c Release
+      - name: Build the portable exe
+        shell: cmd
+        # v1.2.3 -> 1.2.3, stamped into the exe (About shows it).
+        run: |
+          set TAG=${{ github.event.release.tag_name }}
+          call build.cmd %TAG:v=%
+      - name: Check that it starts
+        shell: pwsh
+        run: |
+          $p = Start-Process dist/DataPeach.exe -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) { throw "DataPeach.exe exited at startup with code $($p.ExitCode)" }
+          Stop-Process -Id $p.Id -Force
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/DataPeach.exe --clobber
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Test
+        run: dotnet test -c Release
+      - name: Build the portable binary
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: ./build.sh "${TAG#v}"
+      - name: Check that it starts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq xvfb libice6 libsm6 libfontconfig1 libx11-6 libxext6 libxi6 libxrandr2 libxcursor1
+          # Still running after 15 s means it started; timeout then stops it with code 124.
+          set +e
+          xvfb-run -a timeout 15 dist/DataPeach
+          code=$?
+          if [ $code -ne 124 ]; then echo "::error::DataPeach exited at startup with code $code"; exit 1; fi
+      - name: Package it
+        run: tar -czf DataPeach-linux-x64.tar.gz -C dist DataPeach
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" DataPeach-linux-x64.tar.gz --clobber

@@ -1,0 +1,23 @@
+# Pull requests must come from a branch named feature/…, fix/…, docs/…, refactor/… or chore/… (see CONTRIBUTING.md).
+name: Branch name
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the branch name
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if [[ "$BRANCH" =~ ^(feature|fix|docs|refactor|chore)/[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "OK: $BRANCH"
+          else
+            echo "::error::Branch '$BRANCH' does not follow CONTRIBUTING.md: use feature/, fix/, docs/, refactor/ or chore/ followed by lowercase words joined with '-' (e.g. fix/diff-scroll-sync)."
+            exit 1
+          fi

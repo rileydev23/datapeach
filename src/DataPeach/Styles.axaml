@@ -1,0 +1,335 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ae="using:AvaloniaEdit">
+  <!-- Design tokens: see docs/DISENO.md for the full system. -->
+  <Styles.Resources>
+    <x:Double x:Key="TreeViewItemMinHeight">22</x:Double>
+    <SolidColorBrush x:Key="TreeViewItemBackgroundPointerOver" Color="#2d2e33" />
+    <SolidColorBrush x:Key="TreeViewItemBackgroundPressed" Color="#2d2e33" />
+    <SolidColorBrush x:Key="TreeViewItemBackgroundSelected" Color="#33507a" />
+    <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPointerOver" Color="#3a5a88" />
+    <SolidColorBrush x:Key="TreeViewItemBackgroundSelectedPressed" Color="#33507a" />
+    <SolidColorBrush x:Key="TreeViewItemForegroundPointerOver" Color="#d4d4d4" />
+    <SolidColorBrush x:Key="TreeViewItemForegroundSelected" Color="#ffffff" />
+    <SolidColorBrush x:Key="TreeViewItemForegroundSelectedPointerOver" Color="#ffffff" />
+    <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="#33507a" />
+    <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="#3a5a88" />
+    <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="#33507a" />
+    <!-- Scroll bars: 4 px everywhere (see the ScrollBar styles below). -->
+    <x:Double x:Key="ScrollBarSize">4</x:Double>
+  </Styles.Resources>
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="#1e1f22" />
+    <Setter Property="FontFamily" Value="Segoe UI" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="Button">
+    <Setter Property="Background" Value="#2d2e33" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="BorderBrush" Value="#3a3c42" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#3a3c42" />
+  </Style>
+  <!-- "Conexiones" launcher in the tab strip: darker, square, separated from the tabs. -->
+  <Style Selector="Button.home">
+    <Setter Property="Background" Value="#111214" />
+    <Setter Property="Foreground" Value="#a8abb2" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="BorderBrush" Value="#3a3c42" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.home:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#1f2024" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.home.active">
+    <Setter Property="Background" Value="#0d1520" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <!-- Title bar (custom, the window has no system chrome): 34 px, a level darker than the tab strip. -->
+  <Style Selector="Border.titlebar">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Background" Value="#111214" />
+  </Style>
+  <Style Selector="Button.caption">
+    <Setter Property="Width" Value="46" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.caption Path">
+    <Setter Property="Stroke" Value="#a8abb2" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="10" />
+  </Style>
+  <Style Selector="Button.caption:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#26272b" />
+  </Style>
+  <Style Selector="Button.caption:pointerover Path">
+    <Setter Property="Stroke" Value="#ffffff" />
+  </Style>
+  <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#e0645a" />
+  </Style>
+
+  <Style Selector="Button.flat">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="6,2" />
+  </Style>
+  <Style Selector="Button.accent">
+    <Setter Property="Background" Value="#4a90d9" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#5aa0e9" />
+  </Style>
+  <!-- A switch to a riskier mode. -->
+  <Style Selector="Button.warn">
+    <Setter Property="Background" Value="#5a4318" />
+    <Setter Property="BorderBrush" Value="#8a6d1f" />
+  </Style>
+  <Style Selector="Button.warn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#6e5320" />
+  </Style>
+
+  <!-- Segmented switch (the results of a console): active segment gets an accent underline. -->
+  <Style Selector="Button.seg">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="#8a8d93" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="6,6" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="Button.seg.active">
+    <Setter Property="BorderBrush" Value="#4a90d9" />
+    <Setter Property="Foreground" Value="#ffffff" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- Joined switch (engine, care, language): the active one in selection blue. -->
+  <Style Selector="Button.mode">
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="#8a8d93" />
+  </Style>
+  <Style Selector="Button.mode.left">
+    <Setter Property="CornerRadius" Value="3,0,0,3" />
+  </Style>
+  <Style Selector="Button.mode.right">
+    <Setter Property="CornerRadius" Value="0,3,3,0" />
+    <Setter Property="BorderThickness" Value="0,1,1,1" />
+  </Style>
+  <Style Selector="Button.mode.mid">
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderThickness" Value="0,1,0,1" />
+  </Style>
+  <Style Selector="Button.mode.active">
+    <Setter Property="Background" Value="#33507a" />
+    <Setter Property="Foreground" Value="#ffffff" />
+  </Style>
+  <Style Selector="Button.mode.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#3a5a88" />
+  </Style>
+
+  <!-- A failed result in the console's result switch. -->
+  <Style Selector="Button.seg.error">
+    <Setter Property="Foreground" Value="#e0645a" />
+  </Style>
+
+  <!-- Environment tag of a connection (Propio de DataPeach): production in amber, read-only dim. -->
+  <Style Selector="Border.envtag">
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="Padding" Value="5,0" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.envtag TextBlock">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Border.envtag.prod">
+    <Setter Property="Background" Value="#5a4318" />
+    <Setter Property="BorderBrush" Value="#8a6d1f" />
+  </Style>
+  <Style Selector="Border.envtag.prod TextBlock">
+    <Setter Property="Foreground" Value="#f0c890" />
+  </Style>
+  <Style Selector="Border.envtag.ro">
+    <Setter Property="Background" Value="#2d2e33" />
+    <Setter Property="BorderBrush" Value="#3a3c42" />
+  </Style>
+  <Style Selector="Border.envtag.ro TextBlock">
+    <Setter Property="Foreground" Value="#8a8d93" />
+  </Style>
+
+  <Style Selector="ToggleButton">
+    <Setter Property="Background" Value="#2d2e33" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="3" />
+    <Setter Property="BorderBrush" Value="#3a3c42" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="ToggleButton.chip">
+    <Setter Property="Padding" Value="6,1" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="MinWidth" Value="26" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="#26272b" />
+    <Setter Property="BorderBrush" Value="#3a3c42" />
+  </Style>
+  <Style Selector="SelectableTextBlock.mono">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New, DejaVu Sans Mono, Liberation Mono" />
+  </Style>
+  <Style Selector="TextBox.mono">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New, DejaVu Sans Mono, Liberation Mono" />
+  </Style>
+
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#33507a" />
+  </Style>
+  <Style Selector="ListBoxItem:pointerover:not(:selected) /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#2d2e33" />
+  </Style>
+
+  <!-- Scroll bars, everywhere: one slim 4 px bar in its own row/column (never on top of the content), no arrow
+       buttons, and it does not grow under the pointer. Tab strips (ListBox.tabstrip) also scroll sideways with
+       the wheel (Views/TabStrip.cs). -->
+  <Style Selector="ScrollViewer">
+    <Setter Property="AllowAutoHide" Value="False" />
+  </Style>
+  <Style Selector="ListBox.tabstrip">
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+  </Style>
+  <Style Selector="ScrollBar:horizontal">
+    <Setter Property="MinHeight" Value="4" />
+    <Setter Property="Height" Value="4" />
+  </Style>
+  <Style Selector="ScrollBar:vertical">
+    <Setter Property="MinWidth" Value="4" />
+    <Setter Property="Width" Value="4" />
+  </Style>
+  <Style Selector="ScrollBar /template/ RepeatButton#PART_LineUpButton">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="ScrollBar /template/ RepeatButton#PART_LineDownButton">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+  <Style Selector="ScrollBar:horizontal /template/ Thumb">
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinWidth" Value="24" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+  <Style Selector="ScrollBar:vertical /template/ Thumb">
+    <Setter Property="Width" Value="4" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="RenderTransform" Value="none" />
+  </Style>
+
+  <!-- Console and table tabs inside a connection: the selected one blends into the bar below it. -->
+  <Style Selector="ListBox.doctabs ListBoxItem">
+    <Setter Property="BorderBrush" Value="#3a3c42" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+  </Style>
+  <Style Selector="ListBox.doctabs ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#26272b" />
+  </Style>
+  <Style Selector="ListBox.doctabs ListBoxItem:selected">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <Style Selector="TreeView">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="TreeViewItem">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TreeViewItem /template/ ToggleButton#PART_ExpandCollapseChevron">
+    <Setter Property="Margin" Value="6,0,4,0" />
+  </Style>
+
+  <!-- Hand cursor on everything that is clicked like a button or a link; lists, tree, tabs and the window buttons
+       keep the arrow, as in Windows. -->
+  <Style Selector="Button">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="ToggleButton">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="SplitButton">
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.caption">
+    <Setter Property="Cursor" Value="Arrow" />
+  </Style>
+  <Style Selector="Button:disabled, ToggleButton:disabled">
+    <Setter Property="Cursor" Value="Arrow" />
+  </Style>
+
+  <!-- Warning card inside a page: amber edge, never a modal. -->
+  <Style Selector="Border.warning">
+    <Setter Property="Background" Value="#2d2e33" />
+    <Setter Property="BorderBrush" Value="#8a6d1f" />
+    <Setter Property="BorderThickness" Value="3,1,1,1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="12,10" />
+  </Style>
+
+  <Style Selector="GridSplitter">
+    <Setter Property="Background" Value="#3a3c42" />
+  </Style>
+
+  <Style Selector="TextBlock.dim">
+    <Setter Property="Foreground" Value="#8a8d93" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New, DejaVu Sans Mono, Liberation Mono" />
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- SQL editor -->
+  <Style Selector="ae|TextEditor">
+    <Setter Property="Background" Value="#1b1c1f" />
+    <Setter Property="Foreground" Value="#d4d4d4" />
+    <Setter Property="LineNumbersForeground" Value="#5d6066" />
+    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New, DejaVu Sans Mono, Liberation Mono" />
+  </Style>
+</Styles>

@@ -1,0 +1,26 @@
+# Labels each pull request from its branch name and keeps the draft of the next release up to date.
+name: Release drafter
+
+on:
+  push:
+    branches: [main]
+  # pull_request_target so pull requests from forks can be labeled too (it never checks out their code).
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # update the draft release
+      pull-requests: write  # add labels to pull requests
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        with:
+          # On pull requests only the labels are updated; the draft follows main.
+          disable-releaser: ${{ github.event_name == 'pull_request_target' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

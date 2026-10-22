@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="using:DataPeach.Services"
+             xmlns:vm="using:DataPeach.ViewModels"
+             xmlns:c="using:DataPeach.Controls"
+             xmlns:ae="using:AvaloniaEdit"
+             x:Class="DataPeach.Views.ConsoleView"
+             x:DataType="vm:ConsoleViewModel">
+  <Grid RowDefinitions="Auto,*,4,Auto,*">
+    <!-- Console toolbar -->
+    <Border Background="#26272b" BorderBrush="#3a3c42" BorderThickness="0,0,0,1" Padding="8,5">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Right" Text="{Binding RunStatus}" Classes="dim" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420" />
+        <StackPanel Orientation="Horizontal" Spacing="4">
+          <Button Classes="accent" Content="{l:L console.run}" Command="{Binding RunCommand}" ToolTip.Tip="{l:L console.run.tip}" />
+          <Button Content="{l:L console.runAll}" Command="{Binding RunAllCommand}" ToolTip.Tip="Ctrl+Shift+Enter" />
+          <Button Content="{l:L console.cancel}" Command="{Binding CancelCommand}" ToolTip.Tip="Esc" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <ae:TextEditor Grid.Row="1" x:Name="Editor" ShowLineNumbers="True" FontSize="13" Padding="4,4,0,0"
+                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
+
+    <GridSplitter Grid.Row="2" ResizeDirection="Rows" />
+
+    <!-- Result header: one segment per result, its summary and export -->
+    <Border Grid.Row="3" Background="#26272b" BorderBrush="#3a3c42" BorderThickness="0,0,0,1" Padding="6,0" IsVisible="{Binding HasResults}">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Classes="flat" Content="⋯" x:Name="ExportButton" ToolTip.Tip="{l:L console.export.tip}" Padding="8,2" />
+        <TextBlock DockPanel.Dock="Right" Text="{Binding SelectedResult.Summary, FallbackValue=''}" Classes="dim" FontSize="12" VerticalAlignment="Center" Margin="10,0" />
+        <ItemsControl ItemsSource="{Binding Results}" IsVisible="{Binding ManyResults}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ResultViewModel">
+              <Button Classes="seg" Content="{Binding Label}" Click="OnResultClick" ToolTip.Tip="{Binding Statement}"
+                      Classes.active="{Binding IsSelected}" Classes.error="{Binding HasError}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="{Binding SelectedResult.Label, FallbackValue=''}" IsVisible="{Binding !ManyResults}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,6" />
+      </DockPanel>
+    </Border>
+
+    <Grid Grid.Row="4" Background="#1b1c1f">
+      <c:ResultGrid x:Name="Grid" Source="{Binding SelectedResult}" IsVisible="{Binding SelectedResult.HasGrid, FallbackValue=False}" />
+      <ScrollViewer IsVisible="{Binding SelectedResult.HasError, FallbackValue=False}" HorizontalScrollBarVisibility="Disabled">
+        <SelectableTextBlock Text="{Binding SelectedResult.Error, FallbackValue=''}" Foreground="#e0645a" Classes="mono" FontSize="12" TextWrapping="Wrap" Margin="12,10" />
+      </ScrollViewer>
+      <TextBlock Text="{Binding SelectedResult.Summary, FallbackValue=''}" Classes="dim" Margin="12,10"
+                 IsVisible="{Binding SelectedResult.IsMessage, FallbackValue=False}" />
+      <TextBlock Text="{l:L console.empty}" Classes="dim" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                 IsVisible="{Binding !HasResults}" />
+    </Grid>
+  </Grid>
+</UserControl>

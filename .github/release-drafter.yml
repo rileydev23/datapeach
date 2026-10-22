@@ -1,0 +1,54 @@
+# Release Drafter keeps a draft of the next release up to date with every merged pull request.
+# The PR's labels (set automatically from the branch name, see autolabeler) decide its section in the notes and how
+# much the version goes up. Publishing the draft creates the tag and triggers release.yml, which attaches the exe.
+
+name-template: 'DataPeach $RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+autolabeler:
+  - label: enhancement
+    branch: ['/^feature\/.+/']
+  - label: bug
+    branch: ['/^fix\/.+/']
+  - label: documentation
+    branch: ['/^docs\/.+/']
+  - label: refactor
+    branch: ['/^refactor\/.+/']
+  - label: chore
+    branch: ['/^chore\/.+/']
+
+categories:
+  - title: '💥 Breaking changes / Cambios incompatibles'
+    labels: [breaking]
+  - title: '✨ New / Novedades'
+    labels: [enhancement]
+  - title: '🐛 Fixes / Correcciones'
+    labels: [bug]
+  - title: '📝 Documentation / Documentación'
+    labels: [documentation]
+  - title: '🧹 Maintenance / Mantenimiento'
+    labels: [refactor, chore]
+
+exclude-labels: [skip-changelog]
+
+change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
+change-title-escapes: '\<*_&'
+
+# SemVer: a feature bumps the minor version, everything else the patch; add the "breaking" label for a major one.
+version-resolver:
+  major:
+    labels: [breaking]
+  minor:
+    labels: [enhancement]
+  patch:
+    labels: [bug, documentation, refactor, chore]
+  default: patch
+
+template: |
+  $CHANGES
+
+  **Download / Descarga** (portable, no installation needed / portable, no requiere instalación):
+  - Windows: `DataPeach.exe`
+  - Linux: `DataPeach-linux-x64.tar.gz` (`tar -xzf DataPeach-linux-x64.tar.gz && ./DataPeach`)
+
+  **Full changelog:** https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

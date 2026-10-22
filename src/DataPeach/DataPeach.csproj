@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/app.ico</ApplicationIcon>
+    <AssemblyName>DataPeach</AssemblyName>
+    <RootNamespace>DataPeach</RootNamespace>
+    <Version>0.1.0</Version>
+    <!-- Not invariant: the SQL Server driver refuses to run without ICU (Program.Main keeps the invariant culture).
+         Measured: ~15 ms more at start, same memory. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TieredPGO>true</TieredPGO>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="DataPeach.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.*" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.*" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.4.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DataPeach.Core\DataPeach.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/app.ico" />
+    <AvaloniaResource Include="Assets\icon64.png" />
+  </ItemGroup>
+  <!-- We render with the software rasterizer, so the ~25 MB ANGLE DLL is dead weight that
+       would otherwise be extracted (and AV-scanned) on the first launch of every build. -->
+  <Target Name="DropAngle" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Filename)%(Extension)' == 'av_libglesv2.dll'" />
+    </ItemGroup>
+  </Target>
+</Project>

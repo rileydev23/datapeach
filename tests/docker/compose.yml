@@ -1,0 +1,76 @@
+# Database servers for the engine tests (tests/DataPeach.Tests/Engines). Ports are shifted so they never clash with a
+# server already installed on the machine. Start them with:
+#   docker compose -f tests/docker/compose.yml up -d --wait
+# and run the tests with DATAPEACH_ENGINE_TESTS=1.
+name: datapeach-tests
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: peach
+      POSTGRES_PASSWORD: peach
+      POSTGRES_DB: peach
+    ports: ["55432:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "peach"]
+      interval: 2s
+      retries: 30
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: peach
+      MYSQL_DATABASE: peach
+      MYSQL_USER: peach
+      MYSQL_PASSWORD: peach
+    ports: ["53306:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-upeach", "-ppeach"]
+      interval: 2s
+      retries: 60
+
+  mariadb:
+    image: mariadb:11.8
+    environment:
+      MARIADB_ROOT_PASSWORD: peach
+      MARIADB_DATABASE: peach
+      MARIADB_USER: peach
+      MARIADB_PASSWORD: peach
+    ports: ["53307:3306"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      retries: 60
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: Peach_12345
+    ports: ["51433:1433"]
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-C", "-S", "localhost", "-U", "sa", "-P", "Peach_12345", "-Q", "SELECT 1"]
+      interval: 3s
+      retries: 60
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    environment:
+      ORACLE_PASSWORD: peach
+      APP_USER: peach
+      APP_USER_PASSWORD: peach
+    ports: ["51521:1521"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 5s
+      retries: 60
+
+  cockroach:
+    image: cockroachdb/cockroach:latest-v25.2
+    command: start-single-node --insecure
+    ports: ["56257:26257"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health?ready=1"]
+      interval: 2s
+      retries: 60

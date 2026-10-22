@@ -300,6 +300,7 @@ un diálogo, termina en `...`. Botones de un glifo (`✕`, `⋯`, `↶`) siempre
 `TextBox` con fondo `#26272b` y borde `#3a3c42`; *watermark* con un ejemplo real
 ("id > 100 AND name LIKE 'a%'"). El filtro del árbol: `Esc` limpia, `↓` pasa a la lista, `Enter` abre la primera
 tabla. WHERE y ORDER BY: `Enter` recarga.
+Un campo que se puede dejar vacío lo dice en la etiqueta: "Puerto (opcional)", y el *watermark* explica qué pasa si queda vacío.
 
 ### 7.3 Árbol de estructura (Propio de DataPeach)
 
@@ -397,7 +398,7 @@ Construidos en código, modales, fondo `#26272b`, sin redimensionar, centrados.
 
 | Diálogo | Contenido |
 |---|---|
-| Nueva / Editar conexión | Motor (`mode`), estado del driver en `dim`, Nombre, Host + Puerto, Base de datos, Usuario + Contraseña (`•`), o Archivo + Examinar... para SQLite y DuckDB; Cuidado (Normal \| Producción \| Solo lectura) con su explicación; Carpeta del proyecto para consolas; Opciones adicionales. **Probar conexión** a la izquierda (descarga el driver si falta; resultado en verde o rojo), Guardar (`accent`) y Cancelar a la derecha. |
+| Nueva / Editar conexión | Motor (`mode`), estado del driver en `dim`, Nombre, Host + Puerto, Base de datos, Usuario + Contraseña (`•`), o Archivo + Examinar... para SQLite y DuckDB; Cuidado (Normal \| Producción \| Solo lectura) con su explicación; Carpeta del proyecto para consolas; **▸ Avanzado** plegable (abierto si la conexión ya tiene opciones): casillas con las opciones comunes del motor (`ToolTip` con el `clave=valor` que agregan) y Otras opciones en texto libre; ambas se guardan juntas en la cadena de opciones. Los campos que el motor no exige llevan "(opcional)" en la etiqueta. **Probar conexión** a la izquierda (descarga el driver si falta; resultado en verde o rojo), Guardar (`accent`) y Cancelar a la derecha. |
 | Drivers | Una fila por motor: punto de color, nombre, paquete, estado (no instalado / instalado versión · tamaño · fecha / actualización recomendada) y los paquetes descargados; Descargar o Actualizar, Versión... (lista de nuget.org) y Quitar. |
 | `Confirm`, `Message`, `Prompt`, `Pick`, Acerca de | Los de la familia. |
 

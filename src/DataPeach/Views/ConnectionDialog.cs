@@ -42,17 +42,18 @@ public static class ConnectionDialog
         var user = Box(e.User);
         var pwd = new TextBox { Text = password ?? "", PasswordChar = '•', Watermark = Loc.T("conn.dlg.password.watermark") };
         var file = Box(e.FilePath, Loc.T("conn.dlg.file.watermark"));
-        var options = Box(e.Options, Loc.T("conn.dlg.options.watermark"));
+        // The advanced checkboxes live inside Options: the box shows only what they don't cover.
+        var (flagsOn, otherOptions) = ConnectionFlags.Split(e.Kind, e.Options);
+        var options = Box(otherOptions, Loc.T("conn.dlg.options.watermark"));
         var queries = Box(e.QueriesFolder ?? "", Loc.T("conn.dlg.queries.watermark"));
         var testResult = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12, IsVisible = false };
         var driverInfo = new TextBlock { Classes = { "dim" }, FontSize = 11, TextWrapping = TextWrapping.Wrap };
         var modeNote = new TextBlock { Classes = { "dim" }, FontSize = 11, TextWrapping = TextWrapping.Wrap };
 
-        Control Labeled(string label, Control field) => new StackPanel
-        {
-            Spacing = 4,
-            Children = { new TextBlock { Text = label, Foreground = Palette.Dim, FontSize = 12 }, field },
-        };
+        TextBlock Label(string text) => new() { Text = text, Foreground = Palette.Dim, FontSize = 12 };
+        Control LabeledBy(TextBlock label, Control field) => new StackPanel { Spacing = 4, Children = { label, field } };
+        Control Labeled(string label, Control field) => LabeledBy(Label(label), field);
+        string Optional(string key) => Loc.F("conn.dlg.optional", Loc.T(key));
 
         Control WithBrowse(TextBox box, Func<Task<string?>> pick)
         {
@@ -76,11 +77,14 @@ public static class ConnectionDialog
         var serverFields = new Grid { ColumnDefinitions = new ColumnDefinitions("*,10,110"), RowDefinitions = new RowDefinitions("Auto,10,Auto,10,Auto") };
         void Place(Control c, int row, int col, int span = 1) { Grid.SetRow(c, row); Grid.SetColumn(c, col); Grid.SetColumnSpan(c, span); serverFields.Children.Add(c); }
         Place(Labeled(Loc.T("conn.dlg.host"), host), 0, 0);
-        Place(Labeled(Loc.T("conn.dlg.port"), port), 0, 2);
-        Place(Labeled(Loc.T("conn.dlg.database"), database), 2, 0, 3);
+        Place(Labeled(Optional("conn.dlg.port"), port), 0, 2);
+        Place(Labeled(Optional("conn.dlg.database"), database), 2, 0, 3);
         var userGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,10,*") };
-        var userField = Labeled(Loc.T("conn.dlg.user"), user);
-        var pwdField = Labeled(Loc.T("conn.dlg.password"), pwd);
+        // Required or not depends on the engine: see UpdateKind.
+        var userLabel = Label("");
+        var pwdLabel = Label("");
+        var userField = LabeledBy(userLabel, user);
+        var pwdField = LabeledBy(pwdLabel, pwd);
         Grid.SetColumn(pwdField, 2);
         userGrid.Children.Add(userField);
         userGrid.Children.Add(pwdField);
@@ -88,11 +92,40 @@ public static class ConnectionDialog
 
         var fileField = Labeled(Loc.T("conn.dlg.file"), WithBrowse(file, () => Dialogs.PickFile(Loc.T("home.pickFile"), Loc.T("home.pickFile.filter"), DbKinds.FilePatterns)));
 
+        // Advanced: the engine's common options as checkboxes, then the free text for anything else.
+        var flagBoxes = new StackPanel { Spacing = 2 };
+        var advancedBody = new StackPanel { Spacing = 8, Margin = new Thickness(14, 2, 0, 0), IsVisible = e.Options.Length > 0 };
+        advancedBody.Children.Add(flagBoxes);
+        advancedBody.Children.Add(Labeled(Loc.T("conn.dlg.options"), options));
+        var advancedToggle = new Button { Padding = new Thickness(6, 3, 12, 3),Background = Brushes.Transparent, Foreground = Palette.Dim };
+        void UpdateAdvancedToggle() => advancedToggle.Content = (advancedBody.IsVisible ? "▾ " : "▸ ") + Loc.T("conn.dlg.advanced");
+        advancedToggle.Click += (_, _) => { advancedBody.IsVisible = !advancedBody.IsVisible; UpdateAdvancedToggle(); };
+        UpdateAdvancedToggle();
+
+        void UpdateFlags()
+        {
+            flagBoxes.Children.Clear();
+            foreach (var f in ConnectionFlags.For(e.Kind))
+            {
+                var box = new CheckBox { Content = Loc.T("conn.flag." + f.Id), IsChecked = flagsOn.Contains(f.Id), FontSize = 12 };
+                ToolTip.SetTip(box, f.Key + "=" + f.Value);
+                box.IsCheckedChanged += (_, _) => { if (box.IsChecked == true) flagsOn.Add(f.Id); else flagsOn.Remove(f.Id); };
+                flagBoxes.Children.Add(box);
+            }
+            flagBoxes.IsVisible = flagBoxes.Children.Count > 0;
+        }
+
         void UpdateKind()
         {
             for (int i = 0; i < kinds.Length; i++) ((Button)engineButtons.Children[i]).Classes.Set("active", kinds[i] == e.Kind);
             serverFields.IsVisible = !e.IsFile;
             fileField.IsVisible = e.IsFile;
+            // SQL Server signs in with the Windows account and PostgreSQL with the OS user (or .pgpass) when no user is given.
+            bool userOptional = e.Kind is DbKind.SqlServer or DbKind.Postgres;
+            userLabel.Text = userOptional ? Optional("conn.dlg.user") : Loc.T("conn.dlg.user");
+            pwdLabel.Text = userOptional ? Optional("conn.dlg.password") : Loc.T("conn.dlg.password");
+            user.Watermark = e.Kind == DbKind.SqlServer ? Loc.T("conn.dlg.user.windows") : null;
+            UpdateFlags();
             var spec = DriverCatalog.For(e.Kind);
             var installed = app.Drivers.Installed(e.Kind);
             driverInfo.Text = installed is null
@@ -142,7 +175,7 @@ public static class ConnectionDialog
             target.Database = database.Text?.Trim() ?? "";
             target.User = user.Text?.Trim() ?? "";
             target.FilePath = file.Text?.Trim().Trim('"') ?? "";
-            target.Options = options.Text?.Trim() ?? "";
+            target.Options = ConnectionFlags.Merge(e.Kind, flagsOn, options.Text ?? "");
             target.QueriesFolder = string.IsNullOrWhiteSpace(queries.Text) ? null : queries.Text.Trim().Trim('"');
             var portText = port.Text?.Trim() ?? "";
             if (portText.Length == 0) target.Port = 0;
@@ -188,7 +221,18 @@ public static class ConnectionDialog
                 var version = await Task.Run(() => s.TestAsync(cts.Token));
                 Show(Loc.F("conn.dlg.testOk", DbKinds.Name(probe.Kind), version, clock.ElapsedMilliseconds), true);
             }
-            catch (Exception ex) { Show(ex.Message, false); }
+            catch (Exception ex)
+            {
+                var message = ex.Message;
+                // The usual first wall with SQL Server 2022 / SqlClient 4+: encryption is on and the certificate is self-signed.
+                if (probe.Kind == DbKind.SqlServer && !flagsOn.Contains("trustCert") && message.Contains("certificate", StringComparison.OrdinalIgnoreCase))
+                {
+                    message += "\n" + Loc.F("conn.dlg.certHint", Loc.T("conn.flag.trustCert"));
+                    advancedBody.IsVisible = true;
+                    UpdateAdvancedToggle();
+                }
+                Show(message, false);
+            }
             finally { test.IsEnabled = true; }
         };
 
@@ -217,13 +261,13 @@ public static class ConnectionDialog
             {
                 Labeled(Loc.T("conn.dlg.engine"), engineButtons),
                 driverInfo,
-                Labeled(Loc.T("conn.dlg.name"), name),
+                Labeled(Optional("conn.dlg.name"), name),
                 serverFields,
                 fileField,
                 Labeled(Loc.T("conn.dlg.mode"), modeButtons),
                 modeNote,
                 Labeled(Loc.T("conn.dlg.queries"), WithBrowse(queries, () => Dialogs.PickFolder(Loc.T("conn.dlg.queries")))),
-                Labeled(Loc.T("conn.dlg.options"), options),
+                new StackPanel { Children = { advancedToggle, advancedBody } },
                 testResult,
                 buttons,
             },

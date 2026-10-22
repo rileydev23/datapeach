@@ -8,6 +8,7 @@ public sealed class SybaseTests : EngineTests
     protected override ConnectionEntry Entry => new() { Kind = DbKind.Sybase, Host = "localhost", Port = 55000, Database = "testdb", User = "sa" };
     protected override string Password => "myPassword";
     protected override string? Schema => "dbo";
+    protected override string? SystemDatabase => "model";
     protected override string SlowQuery => "WAITFOR DELAY '00:00:10'";
 
     // Columns are NOT NULL unless they say NULL; there is no VALUES list of rows, so the users come from a loop.

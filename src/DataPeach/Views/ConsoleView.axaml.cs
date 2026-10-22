@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using AvaloniaEdit.CodeCompletion;
 using DataPeach.Controls;
+using DataPeach.Core;
 using DataPeach.ViewModels;
 
 namespace DataPeach.Views;
@@ -44,6 +45,29 @@ public partial class ConsoleView : UserControl
                 MenuPresenter.Show(g, GridMenus.ForGrid(g, conn, r, "result", null));
         };
         Grid.Notice += text => { if (FindOwner() is { } conn) conn.Notice = text; };
+        DatabaseButton.Click += async (_, _) =>
+        {
+            if (_vm is not { } console || FindOwner() is not { } conn) return;
+            // A short list as a menu; a server with many databases gets the filterable picker.
+            var all = conn.Databases.Where(d => !d.IsSystem).Concat(conn.Databases.Where(d => d.IsSystem)).ToList();
+            void Pick(string name) => console.MoveTo(name);
+            if (all.Count <= 15)
+            {
+                var items = new List<MenuAction>();
+                foreach (var d in all)
+                {
+                    if (d.IsSystem && items.Count > 0 && !all[all.IndexOf(d) - 1].IsSystem) items.Add(MenuAction.Separator);
+                    var name = d.Name;
+                    items.Add(MenuAction.Sync((name == conn.EffectiveDatabase(console.Database) ? "● " : "    ") + name, () => Pick(name)));
+                }
+                if (items.Count > 0) MenuPresenter.Show(DatabaseButton, items);
+                return;
+            }
+            var picked = await Dialogs.Pick(Loc.T("console.database.pick"), Loc.T("console.database.pick.watermark"),
+                q => all.Where(d => Dialogs.Fuzzy(d.Name, q)).OrderBy(d => d.IsSystem).ThenBy(d => !d.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase)).ToList(),
+                d => d.Name, d => d.IsSystem ? Loc.T("tree.system") : "", null);
+            if (picked is not null) Pick(picked.Name);
+        };
         ExportButton.Click += (_, _) =>
         {
             if (_vm?.SelectedResult is { HasGrid: true } r && FindOwner() is { } conn)

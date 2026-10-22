@@ -108,7 +108,7 @@ public static class DeleteHistoryDialog
         toConsole.Click += (_, _) =>
         {
             if (Current() is not { } r) return;
-            vm.OpenInConsole(DeleteInverse.Script(r, vm.Dialect));
+            vm.OpenInConsole(DeleteInverse.Script(r, vm.Dialect), r.Database);
             w.Close();
         };
         copy.Click += async (_, _) =>

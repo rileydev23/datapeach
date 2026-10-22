@@ -106,6 +106,39 @@ public abstract partial class Dialect
     public abstract Task<SchemaSnapshot> LoadSchemaAsync(DbConnection c, CancellationToken ct);
     public abstract Task<TableDetails> LoadDetailsAsync(DbConnection c, DbTable t, CancellationToken ct);
 
+    // ------------------------------------------------------------------ databases
+
+    /// <summary>
+    /// Whether one server holds several databases that the tree shows as folders (SQL Server, PostgreSQL, MySQL,
+    /// SAP ASE). Each one is read and queried through a connection of its own, made by changing the database field.
+    /// </summary>
+    public virtual bool HasDatabases => false;
+
+    /// <summary>The server's databases and the one <paramref name="c"/> is in (null when none, MySQL without one).</summary>
+    public virtual Task<(List<DbDatabase> All, string? Current)> LoadDatabasesAsync(DbConnection c, CancellationToken ct) =>
+        Task.FromResult((new List<DbDatabase>(), (string?)null));
+
+    /// <summary>Whether the engine switches databases with <c>USE name</c> on the same connection.</summary>
+    public virtual bool HasUse => false;
+
+    /// <summary>The database a <c>USE name</c> statement switches to; null for any other statement.</summary>
+    public string? UsedDatabase(string sql)
+    {
+        if (!HasUse) return null;
+        var tokens = SqlTokenizer.Tokenize(sql, Kind).Where(t => t.Kind is not (SqlTokenKind.Whitespace or SqlTokenKind.Comment)).ToList();
+        if (tokens.Count is < 2 or > 3 || !tokens[0].Text(sql).Equals("USE", StringComparison.OrdinalIgnoreCase)) return null;
+        if (tokens.Count == 3 && tokens[2].Text(sql) != ";") return null;
+        var name = tokens[1];
+        if (name.Kind == SqlTokenKind.QuotedIdentifier)
+        {
+            var q = name.Text(sql);
+            return q[1..^1].Replace(q[^1].ToString() + q[^1], q[^1].ToString());
+        }
+        return name.Kind is SqlTokenKind.Identifier or SqlTokenKind.Keyword ? name.Text(sql) : null;
+    }
+
+    public string UseSql(string database) => "USE " + Quote(database);
+
     // ------------------------------------------------------------------ helpers
 
     protected static async Task<List<object?[]>> QueryAsync(DbConnection c, string sql, CancellationToken ct, params (string Name, object? Value)[] args)
@@ -178,6 +211,18 @@ public sealed partial class PostgresDialect : Dialect
     }
 
     public override string ReadOnlySessionSql => "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY";
+
+    public override bool HasDatabases => true;
+
+    /// <summary>Templates (template1) and CockroachDB's "system" are the server's; template0 refuses connections.</summary>
+    public override async Task<(List<DbDatabase> All, string? Current)> LoadDatabasesAsync(DbConnection c, CancellationToken ct)
+    {
+        var cockroach = S((await QueryAsync(c, "SELECT version()", ct)).FirstOrDefault()?[0]).Contains("CockroachDB", StringComparison.Ordinal);
+        var all = (await QueryAsync(c, "SELECT datname, datistemplate FROM pg_database WHERE datallowconn ORDER BY 1", ct))
+            .Select(r => new DbDatabase(S(r[0]), B(r[1]) || (cockroach && S(r[0]) == "system"))).ToList();
+        var current = (await QueryAsync(c, "SELECT current_database()", ct)).FirstOrDefault()?[0] as string;
+        return (all, current);
+    }
 
     public override async Task<SchemaSnapshot> LoadSchemaAsync(DbConnection c, CancellationToken ct)
     {
@@ -271,6 +316,18 @@ public sealed partial class MySqlDialect : Dialect
     public override string ReadOnlySessionSql => "SET SESSION TRANSACTION READ ONLY";
 
     private const string System = "('mysql','information_schema','performance_schema','sys')";
+
+    public override bool HasDatabases => true;
+    public override bool HasUse => true;
+
+    public override async Task<(List<DbDatabase> All, string? Current)> LoadDatabasesAsync(DbConnection c, CancellationToken ct)
+    {
+        string[] system = ["mysql", "information_schema", "performance_schema", "sys"];
+        var all = (await QueryAsync(c, "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA ORDER BY 1", ct))
+            .Select(r => S(r[0])).Select(n => new DbDatabase(n, system.Contains(n, StringComparer.OrdinalIgnoreCase))).ToList();
+        var current = (await QueryAsync(c, "SELECT DATABASE()", ct)).FirstOrDefault()?[0] as string;
+        return (all, current);
+    }
 
     public override async Task<SchemaSnapshot> LoadSchemaAsync(DbConnection c, CancellationToken ct)
     {
@@ -407,6 +464,22 @@ public sealed partial class SqlServerDialect : Dialect
 
     // T-SQL has no read-only session: the app alone refuses to write (ApplicationIntent=ReadOnly only routes to a
     // replica of an availability group).
+
+    public override bool HasDatabases => true;
+    public override bool HasUse => true;
+
+    /// <summary>master, tempdb, model and msdb (ids 1-4) and a replication distributor are the server's; databases
+    /// the login cannot enter or that are not online are left out.</summary>
+    public override async Task<(List<DbDatabase> All, string? Current)> LoadDatabasesAsync(DbConnection c, CancellationToken ct)
+    {
+        var all = (await QueryAsync(c, """
+                SELECT name, CAST(CASE WHEN database_id <= 4 OR is_distributor = 1 THEN 1 ELSE 0 END AS bit)
+                FROM sys.databases WHERE state = 0 AND HAS_DBACCESS(name) = 1 ORDER BY name
+                """, ct))
+            .Select(r => new DbDatabase(S(r[0]), B(r[1]))).ToList();
+        var current = (await QueryAsync(c, "SELECT DB_NAME()", ct)).FirstOrDefault()?[0] as string;
+        return (all, current);
+    }
 
     /// <summary>The column type as it is written in DDL: nvarchar(50), decimal(10,2), varchar(max)…</summary>
     private const string TypeSql = """

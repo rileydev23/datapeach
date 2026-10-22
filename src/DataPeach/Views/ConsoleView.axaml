@@ -15,6 +15,14 @@
           <Button Classes="accent" Content="{l:L console.run}" Command="{Binding RunCommand}" ToolTip.Tip="{l:L console.run.tip}" />
           <Button Content="{l:L console.runAll}" Command="{Binding RunAllCommand}" ToolTip.Tip="Ctrl+Shift+Enter" />
           <Button Content="{l:L console.cancel}" Command="{Binding CancelCommand}" ToolTip.Tip="Esc" />
+          <Border Width="1" Background="#3a3c42" Margin="6,2" IsVisible="{Binding ShowDatabase}" />
+          <Button x:Name="DatabaseButton" IsVisible="{Binding ShowDatabase}" ToolTip.Tip="{l:L console.database.tip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <TextBlock Text="D" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
+              <TextBlock Text="{Binding DatabaseLabel}" VerticalAlignment="Center" MaxWidth="220" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="▾" Foreground="#8a8d93" FontSize="11" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
         </StackPanel>
       </DockPanel>
     </Border>

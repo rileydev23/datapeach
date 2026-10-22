@@ -53,6 +53,9 @@ work with just what it needs:
   **delete history** (30 days by default) and gives you the script that puts them back.
 - **Stored procedures and functions** on every engine that has them: open their code as a script that recreates
   them, run them with a parameter form (OUT ones included) and script their `DROP`.
+- **The whole server, not one database.** Leave the database field empty and the tree shows every database on the
+  server (SQL Server, PostgreSQL, MySQL, SAP ASE) like SQL Server's explorer: each one with its schemas and folders of
+  tables, views, procedures and functions, and the system ones in a folder apart. Each console picks its database.
 - **Consoles are files.** Every console is a `.sql` file saved as you type. Pick a project folder and they go to
   `.peach/queries/`, ready to version and share with git.
 - **Drivers on demand.** The exe ships no drivers: each engine's official package is downloaded from nuget.org the

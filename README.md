@@ -51,6 +51,9 @@ DataPeach hace lo que se usa todos los días con lo justo:
   **solo lectura** (no se ejecuta nada que escriba).
 - **Borrar tiene vuelta atrás.** Cada `DELETE` o `TRUNCATE` pide confirmación con las filas que va a quitar, las
   guarda en un **historial de borrados** (30 días por defecto) y te da el script que las devuelve.
+- **Todo el servidor, no una base.** Deja vacío el campo base de datos y el árbol muestra todas las del servidor
+  (SQL Server, PostgreSQL, MySQL, SAP ASE) como el explorador de SQL Server: cada base con sus esquemas y carpetas
+  de tablas, vistas, procedimientos y funciones, y las de sistema en una carpeta aparte. Cada consola elige su base.
 - **Consolas como archivos.** Cada consola es un `.sql` que se guarda solo. Elige una carpeta de proyecto y van a
   `.peach/queries/`, listas para versionar y compartir con git.
 - **Drivers a demanda.** El exe no trae drivers: el paquete oficial de cada motor se descarga de nuget.org la
@@ -82,8 +85,10 @@ colores, atajos y forma de trabajar.
 
 - Home de conexiones con grupos, favoritos, filtro y búsqueda rápida (`Ctrl+Shift+O`).
 - Arrastra un archivo `.db` / `.sqlite` a la ventana y se abre al instante.
-- Árbol de estructura (esquemas, tablas, vistas, columnas con su tipo y clave primaria, procedimientos y
-  funciones) con filtro, y panel de detalle con índices, claves foráneas y parámetros.
+- Árbol de estructura como el explorador de SQL Server: todas las bases de datos del servidor (las de sistema en
+  una carpeta aparte, cada una leída al abrirla), esquemas y carpetas de tablas, vistas, procedimientos y
+  funciones, con filtro, y panel de detalle con índices, claves foráneas y parámetros. Cada consola elige en qué
+  base corre.
 - Procedimientos almacenados y funciones en todos los motores que los tienen: abrir su código como un script que
   los recrea, ejecutarlos con un formulario de parámetros (incluidos los de salida) y generar su `DROP`.
 - Historial de borrados por conexión, con el SQL que se ejecutó, las filas que quitó y su script inverso:

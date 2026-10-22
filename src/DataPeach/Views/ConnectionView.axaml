@@ -92,8 +92,9 @@
                   <Border Width="0" Margin="{Binding Indent}" />
                   <TextBlock Grid.Column="1" Text="{Binding Chevron}" Foreground="#8a8d93" FontSize="12" VerticalAlignment="Center" x:Name="Chevron" />
                   <TextBlock Grid.Column="2" Text="{Binding Glyph}" Foreground="{Binding GlyphBrush}" FontWeight="Bold" FontSize="11" VerticalAlignment="Center" />
-                  <TextBlock Grid.Column="3" Text="{Binding Text}" FontSize="12" FontStyle="{Binding Style}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Grid.Column="4" Text="{Binding Detail}" Classes="dim" FontSize="11" VerticalAlignment="Center" Margin="6,0,8,0" />
+                  <TextBlock Grid.Column="3" Text="{Binding Text}" FontSize="12" FontStyle="{Binding Style}" FontWeight="{Binding Weight}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="4" Text="{Binding Detail}" Classes="dim" FontSize="11" VerticalAlignment="Center" Margin="6,0,8,0"
+                             MaxWidth="120" TextTrimming="CharacterEllipsis" />
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>

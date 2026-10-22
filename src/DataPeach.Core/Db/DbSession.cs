@@ -28,6 +28,7 @@ public sealed class DbSession : IAsyncDisposable
 {
     private readonly DbProviderFactory _factory;
     private readonly string _connectionString;
+    private readonly string? _password;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private DbConnection? _main;
 
@@ -41,6 +42,7 @@ public sealed class DbSession : IAsyncDisposable
         Entry = entry;
         Dialect = Dialect.For(entry.Kind);
         _factory = factory;
+        _password = password;
         var b = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
         _connectionString = Dialect.ConnectionString(b, entry, password);
     }
@@ -79,6 +81,24 @@ public sealed class DbSession : IAsyncDisposable
     {
         await using var c = await NewConnectionAsync(ct);
         return c.ServerVersion;
+    }
+
+    /// <summary>
+    /// A session on another database of the same server, with the same user and options: what the tree and the
+    /// consoles use for every database but the connection's own.
+    /// </summary>
+    public DbSession ForDatabase(string database)
+    {
+        var e = Entry.Clone();
+        e.Database = database;
+        return new DbSession(e, _password, _factory);
+    }
+
+    /// <summary>The server's databases and the one this session's connections land in.</summary>
+    public async Task<(List<DbDatabase> All, string? Current)> LoadDatabasesAsync(CancellationToken ct)
+    {
+        await using var c = await NewConnectionAsync(ct);
+        return await Dialect.LoadDatabasesAsync(c, ct);
     }
 
     public async Task<SchemaSnapshot> LoadSchemaAsync(CancellationToken ct)

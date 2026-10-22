@@ -134,6 +134,7 @@ Significado fijo, igual en todas las apps Peach. Si un color ya significa algo, 
 | Ámbar claro | `#f0c890` | Texto sobre `#5a4318` (banner de producción, celda editada, error de conexión). |
 | Azul | `#4a90d9` | Columnas en el árbol (`c`), PostgreSQL. |
 | Morado | `#9a7ae0` | Esquemas (`S`). |
+| Texto | `#d4d4d4` | Bases de datos del servidor (`D`); carpetas del árbol (`▤`) en `dim`. |
 | Teal | `#4ac7c0` | Tablas y vistas (`T`, `V`), claves foráneas, SQLite. |
 | Rosa | `#d96a9b` | Código: palabras clave SQL, consolas (`›_`), procedimientos y funciones en el árbol (`P`, `F`). |
 | Oliva | `#c8c84a` | Parámetros (`:id`, `$1`, `@p`). |
@@ -298,13 +299,24 @@ tabla. WHERE y ORDER BY: `Enter` recarga.
 
 ### 7.3 Árbol de estructura (Propio de DataPeach)
 
-Una lista plana virtualizada (rápida con miles de tablas): esquema → tabla o vista → columnas, y después de las
-tablas los procedimientos y funciones del esquema. Filas de 22 px,
-12 px. Chevron `▸`/`▾` clicable, letra de tipo en su color (`S` morado, `T`/`V` teal, `c` azul, `⚿` ámbar para la
-clave primaria, `P`/`F` rosa), nombre (vistas en cursiva) y a la derecha, en `dim` 11 px, el tipo de la columna,
-"sin clave" o la firma de la rutina ("(id int, INOUT n int)"; si es larga, "3 parámetros").
-Con un solo esquema (SQLite, MySQL con base elegida) las tablas van en la raíz; con varios, el esquema por
-defecto se abre solo. El filtro muestra las tablas que coinciden en una lista plana. Doble clic, `Enter` o F4
+Una lista plana virtualizada (rápida con miles de tablas), como el explorador de SQL Server: base de datos →
+esquema → carpetas (Tablas, Vistas, Procedimientos, Funciones) → objeto → columnas. Filas de 22 px,
+12 px. Chevron `▸`/`▾` clicable, letra de tipo en su color (`D` texto, `▤` `dim`, `S` morado, `T`/`V` teal, `c`
+azul, `⚿` ámbar para la clave primaria, `P`/`F` rosa), nombre (vistas en cursiva) y a la derecha, en `dim` 11 px y
+hasta 120 px, el tipo de la columna, "sin clave", el número de objetos de una carpeta o la firma de la rutina
+("(id int, INOUT n int)"; si es larga, "3 parámetros").
+
+- **Bases de datos** (SQL Server, PostgreSQL, MySQL/MariaDB, SAP ASE): todas las del servidor en la raíz, y las
+  suyas (master, tempdb, model, msdb, template1, mysql, information_schema, sybsystemprocs…) en una carpeta
+  **Sistema** cerrada al final. La base de la conexión va en SemiBold y se abre sola (si es de sistema, solo cuando
+  la conexión la nombra). Cada base se lee la primera vez que se abre ("Cargando…" debajo mientras tanto, o el
+  error en cursiva). Oracle, SQLite y DuckDB no tienen este nivel.
+- **Esquemas:** con uno solo, las carpetas van directo bajo la base; con varios, el esquema por defecto se abre
+  solo. Un esquema sin objetos dice "Sin tablas".
+- **Carpetas:** solo las que tienen algo; Tablas empieza abierta y las demás cerradas.
+
+Menú de una base: Nueva consola en esta base · Refrescar · Copiar nombre. El filtro muestra en una lista plana
+los objetos que coinciden en las bases ya leídas, con su nombre completo (`ventas.dbo.clientes`). Doble clic, `Enter` o F4
 abren los datos; menú: Abrir datos · SELECT en la consola · COUNT en la consola · Copiar nombre · Copiar lista
 de columnas. En una rutina, doble clic o `Enter` abre su código en una consola propia (un script que la recrea:
 `CREATE OR REPLACE`, `CREATE OR ALTER`, `DELIMITER $$` o un `DROP` previo según el motor) y el menú ofrece
@@ -321,7 +333,9 @@ El panel de detalle muestra sus parámetros (los de salida en ámbar) y lo que d
 ### 7.5 Consola SQL (Propio de DataPeach)
 
 - Barra (`#26272b`): **▶ Ejecutar** (`accent`, `Ctrl+Enter`), Ejecutar todo (`Ctrl+Shift+Enter`), Cancelar (`Esc`);
-  a la derecha el resumen de la última ejecución.
+  en servidores con varias bases, el botón `D base ▾` con la base donde corre la consola (un menú con las bases;
+  más de 15, el selector con filtro); a la derecha el resumen de la última ejecución. Un `USE otra` ejecutado en la
+  consola la mueve a esa base. Abrir datos, SELECT, código o la llamada de una rutina van a una consola de su base.
 - `Ctrl+Enter` ejecuta la selección o, sin selección, la sentencia donde está el cursor (o la anterior si el
   cursor quedó justo después del `;`). "Ejecutar todo" corre todas en orden y se detiene en el primer error.
 - Debajo, separados por un `GridSplitter`, los resultados: un segmento por resultado (rojo si falló), el resumen
@@ -509,7 +523,8 @@ Atajos comunes a todas las apps Peach (no se reutilizan para otra cosa) y los pr
 
 - **Glifos Unicode** en vez de una fuente de iconos: `★` favorito, `✕` cerrar, `●` motor, `⋯` más, `↶` deshacer
   un cambio, `▶` ejecutar, `⚿` clave primaria, `⏎` salto de línea en una celda, `›_` consola. Letras: `S` esquema,
-  `T` tabla, `V` vista, `c` columna, `ƒ` función, `k` palabra clave; `~ + −` en el staging.
+  `T` tabla, `V` vista, `c` columna, `ƒ` función, `k` palabra clave, `D` base de datos, `▤` carpeta del árbol;
+  `~ + −` en el staging.
 - **Logo:** un durazno azul (índigo a la izquierda, celeste a la derecha) con hoja verde y un cilindro de base de
   datos blanco, con el mismo acabado que los logos de GitPeach y TextPeach. Va en `app.ico`, `icon64.png` y
   `logo.png` (fondo transparente, recortado al borde del dibujo); se muestra en la barra de título, "Acerca de" y

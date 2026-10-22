@@ -118,6 +118,34 @@ public abstract class EngineTests : IAsyncLifetime
         Assert.Contains("users", Assert.Single(od.ForeignKeys).Definition, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>A database the server keeps for itself, which the tree puts in the system folder.</summary>
+    protected virtual string? SystemDatabase => null;
+
+    [Fact]
+    public async Task ListsTheDatabasesAndOpensEachOnItsOwnSession()
+    {
+        if (!Enabled || !_s.Dialect.HasDatabases) return;
+        var (all, current) = await _s.LoadDatabasesAsync(CancellationToken.None);
+        Assert.Equal(Entry.Database, current, ignoreCase: true);
+        Assert.Contains(all, d => d.Name.Equals(current, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(all.Count, all.Select(d => d.Name).Distinct().Count());
+
+        // The connection's own database, reached by name: the test tables, stamped with it.
+        await using (var same = _s.ForDatabase(current!))
+        {
+            var schema = (await same.LoadSchemaAsync(CancellationToken.None)).Stamp(current!);
+            Assert.Equal(current, schema.Find(Schema, "users")!.Database);
+        }
+
+        // A system database: flagged, and its session reads and runs on it.
+        var sys = SystemDatabase!;
+        Assert.True(all.Single(d => d.Name == sys).IsSystem);
+        await using var other = _s.ForDatabase(sys);
+        await other.LoadSchemaAsync(CancellationToken.None);
+        var (_, there) = await other.LoadDatabasesAsync(CancellationToken.None);
+        Assert.Equal(sys, there, ignoreCase: true);
+    }
+
     [Fact]
     public async Task StreamsRowsUpToTheLimit()
     {

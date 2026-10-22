@@ -58,7 +58,7 @@
     `TextBlock`/`SelectableTextBlock`. `TextBox` es solo para escribir.
 12. **Portable y autocontenido.** Un único `.exe` que funciona sin instalar y **sin drivers adentro**: cada driver
     se descarga cuando hace falta ([8.6](#86-drivers-propio-de-datapeach)). Con un `portable.txt` al lado, los
-    datos (también los drivers) se guardan junto al exe. El instalador (`DataPeach-Setup.exe`, `install.sh`) es
+    datos (también los drivers) se guardan junto al exe. El instalador (`datapeach-windows-x64-setup.exe`, `install.sh`) es
     opcional: copia ese mismo exe a una carpeta del usuario, lo registra en el buscador del sistema y deja
     `installed.txt` al lado.
 13. **Actualizar no interrumpe.** Una versión nueva solo se nota como un botón **↑ x.y.z** junto al **?**; nada

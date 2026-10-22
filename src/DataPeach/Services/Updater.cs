@@ -13,7 +13,7 @@ public sealed record UpdateInfo(Version Version, string Notes, string PageUrl, s
 /// <summary>
 /// New versions from the GitHub releases of the repository. Nothing is downloaded until the user confirms; then the
 /// running executable is replaced in place (Windows allows renaming an exe in use, Linux replacing it) or, when it
-/// was installed with DataPeach-Setup.exe, the new setup runs silently so the installed-apps entry stays right.
+/// was installed with datapeach-windows-x64-setup.exe, the new setup runs silently so the installed-apps entry stays right.
 /// Self-contained so it can be copied to the other Peach apps (change <see cref="Repo"/> and <see cref="App"/>).
 /// </summary>
 public static class Updater
@@ -46,8 +46,11 @@ public static class Updater
         ExePath is { } exe && File.Exists(Path.Combine(Path.GetDirectoryName(exe)!, InstalledMarker));
 
     /// <summary>Release asset for this computer: the setup when installed on Windows, otherwise the portable build.</summary>
-    public static string AssetName(bool windows, bool installed) =>
-        windows ? (installed ? $"{App}-Setup.exe" : $"{App}.exe") : $"{App}-linux-x64.tar.gz";
+    public static string AssetName(bool windows, bool installed)
+    {
+        var low = App.ToLowerInvariant();
+        return windows ? $"{low}-windows-x64-{(installed ? "setup" : "portable")}.exe" : $"{low}-linux-x64.tar.gz";
+    }
 
     /// <summary>The latest release if it is newer than <paramref name="current"/>; null when up to date.</summary>
     public static async Task<UpdateInfo?> CheckAsync(Version current, CancellationToken ct = default)

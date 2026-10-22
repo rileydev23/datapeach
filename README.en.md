@@ -102,11 +102,11 @@ settings folder, under `history/`. It backs up `DELETE FROM table [WHERE …]` a
 Download whichever you prefer from the repository's *Releases* (or build it, see
 [Building from source](#building-from-source)):
 
-- **Windows, installer:** `DataPeach-Setup.exe`. It installs for your user only (no administrator) into
+- **Windows, installer:** `datapeach-windows-x64-setup.exe`. It installs for your user only (no administrator) into
   `%LOCALAPPDATA%\Programs\DataPeach`, shows up in Start menu search and is uninstalled from
   **Settings > Apps**.
-- **Windows, portable:** `DataPeach.exe`. Put it in any folder and run it.
-- **Linux:** `DataPeach-linux-x64.tar.gz`. Unpack it with `tar -xzf DataPeach-linux-x64.tar.gz` and run
+- **Windows, portable:** `datapeach-windows-x64-portable.exe`. Put it in any folder and run it.
+- **Linux:** `datapeach-linux-x64.tar.gz`. Unpack it with `tar -xzf datapeach-linux-x64.tar.gz` and run
   `./DataPeach`, or `./install.sh` to install it for your user (no root): it goes to `~/.local/opt/datapeach`,
   with a `datapeach` command and an entry in the app menu. To remove it, `~/.local/opt/datapeach/uninstall.sh`.
 

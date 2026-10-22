@@ -18,6 +18,8 @@ public sealed class DeleteRecord
     public DbKind Kind { get; set; }
     /// <summary>"console" or "staging".</summary>
     public string Source { get; set; } = "";
+    /// <summary>Database the table is in, on servers with several; null elsewhere (and in older records).</summary>
+    public string? Database { get; set; }
     public string? Schema { get; set; }
     public string Table { get; set; } = "";
     /// <summary>What ran, as the user saw it.</summary>
@@ -36,7 +38,7 @@ public sealed class DeleteRecord
     public string? Note { get; set; }
     public DateTimeOffset? Restored { get; set; }
 
-    public string TableDisplay => Schema is null ? Table : Schema + "." + Table;
+    public string TableDisplay => (Database is null || Database == Schema ? "" : Database + ".") + (Schema is null ? Table : Schema + "." + Table);
     public bool HasBackup => Rows.Count > 0;
 
     /// <summary>
@@ -44,11 +46,11 @@ public sealed class DeleteRecord
     /// column types and identity columns; the rows' own columns win (they are what SELECT * gave).
     /// </summary>
     public static DeleteRecord Create(ConnectionEntry e, string source, string? schema, string table, string sql, long affected,
-        CapturedRows? backup, DbTable? known, string? note, DateTimeOffset now)
+        CapturedRows? backup, DbTable? known, string? note, DateTimeOffset now, string? database = null)
     {
         var r = new DeleteRecord
         {
-            Time = now, ConnectionId = e.Id, ConnectionName = e.Name, Kind = e.Kind, Source = source,
+            Time = now, ConnectionId = e.Id, ConnectionName = e.Name, Kind = e.Kind, Source = source, Database = known?.Database ?? database,
             Schema = known?.Schema ?? schema, Table = known?.Name ?? table, Sql = sql, Affected = affected, Note = note,
         };
         if (backup is null) return r;

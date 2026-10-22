@@ -43,6 +43,23 @@ public sealed class SybaseDialect : Dialect
 
     // ASE has no read-only session: the app alone refuses to write, as with SQL Server.
 
+    public override bool HasDatabases => true;
+    public override bool HasUse => true;
+
+    private static readonly string[] SystemDatabases =
+        ["master", "model", "sybsystemprocs", "sybsystemdb", "sybsecurity", "sybmgmtdb", "sybpcidb", "dbccdb", "dbccalt"];
+
+    /// <summary>The databases ASE installs for itself, and every tempdb, go in the system folder.</summary>
+    public override async Task<(List<DbDatabase> All, string? Current)> LoadDatabasesAsync(DbConnection c, CancellationToken ct)
+    {
+        var all = (await QueryAsync(c, "SELECT name FROM master..sysdatabases ORDER BY name", ct))
+            .Select(r => S(r[0]).Trim())
+            .Select(n => new DbDatabase(n, SystemDatabases.Contains(n, StringComparer.OrdinalIgnoreCase) || n.StartsWith("tempdb", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        var current = S((await QueryAsync(c, "SELECT db_name()", ct)).FirstOrDefault()?[0]).Trim();
+        return (all, current.Length > 0 ? current : null);
+    }
+
     /// <summary>The column type as written in DDL: varchar(20), numeric(10,2)…</summary>
     private const string TypeSql = """
         CASE

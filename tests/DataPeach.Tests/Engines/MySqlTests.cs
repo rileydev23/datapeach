@@ -7,6 +7,7 @@ public class MySqlTests : EngineTests
     protected override ConnectionEntry Entry => new() { Kind = DbKind.MySql, Host = "localhost", Port = Port, Database = "peach", User = "peach" };
     protected virtual int Port => 53306;
     protected override string? Schema => "peach";
+    protected override string? SystemDatabase => "information_schema";
     protected override string SlowQuery => "SELECT SLEEP(10)";
 
     protected override string Setup => """

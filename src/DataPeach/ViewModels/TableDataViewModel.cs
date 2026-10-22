@@ -38,7 +38,7 @@ public sealed partial class TableDataViewModel : TabViewModel
         _owner = owner;
         Table = table;
         Title = table.Name;
-        ToolTip = table.Display;
+        ToolTip = table.FullName;
     }
 
     /// <summary>After the schema reloads the table object is new; keep the tab pointing at the current one.</summary>
@@ -53,7 +53,7 @@ public sealed partial class TableDataViewModel : TabViewModel
     [RelayCommand]
     public async Task LoadAsync()
     {
-        if (await _owner.EnsureSessionAsync() is not { } session) return;
+        if (await _owner.EnsureSessionAsync(Table.Database) is not { } session) return;
         _load?.Cancel();
         var cts = _load = new CancellationTokenSource();
         // One row more than the page tells whether there is more, without counting the whole table.
@@ -113,7 +113,7 @@ public sealed partial class TableDataViewModel : TabViewModel
     /// <summary>"SELECT * FROM t WHERE …" in a console, to keep working on it by hand.</summary>
     [RelayCommand]
     private void OpenInConsole() =>
-        _owner.OpenInConsole(_owner.Dialect.SelectTable(Table, Where, OrderBy, Limit) + ";");
+        _owner.OpenInConsole(_owner.Dialect.SelectTable(Table, Where, OrderBy, Limit) + ";", Table.Database);
 
     /// <summary>Writes rows straight into one result (a table tab has exactly one).</summary>
     private sealed class DirectSink(ResultViewModel r) : IResultSink

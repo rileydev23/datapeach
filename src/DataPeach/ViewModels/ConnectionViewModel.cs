@@ -24,12 +24,23 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     private DbSession? _session;
     private Task<DbSession?>? _opening;
     private CancellationTokenSource? _detailsLoad;
+    /// <summary>Keys of the expandable rows toggled away from how they start (most start closed).</summary>
     private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
+    /// <summary>Sessions on the server's other databases, made the first time something runs or reads there.</summary>
+    private readonly Dictionary<string, DbSession> _dbSessions = new(StringComparer.Ordinal);
+    private List<DatabaseNode> _databases = new();
+    private bool _databasesListed;
 
     public ConnectionEntry Entry { get; }
     public Dialect Dialect { get; }
     public StagingArea Staging { get; } = new();
+    /// <summary>The structure of the connection's own database (on servers with several, the one it lands in).</summary>
     public SchemaSnapshot Schema { get; private set; } = SchemaSnapshot.Empty;
+    /// <summary>Whether the tree shows the server's databases (SQL Server, PostgreSQL, MySQL, SAP ASE).</summary>
+    public bool HasDatabases => Dialect.HasDatabases;
+    public IReadOnlyList<DatabaseNode> Databases => _databases;
+    /// <summary>The database the connection lands in: the one it names, or the server's default for the user.</summary>
+    public string? CurrentDatabase { get; private set; }
     public ObservableCollection<SchemaRow> SchemaRows { get; } = new();
     public ObservableCollection<TabViewModel> Docs { get; } = new();
     public ObservableCollection<StagedItem> StagedItems { get; } = new();
@@ -59,7 +70,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     public bool HasStaging => Staging.Count > 0;
     public string StagingTitle => Loc.Plural("staging.count", Staging.Count);
     public bool HasDetail => DetailTable is not null || DetailRoutine is not null;
-    public string DetailTitle => DetailRoutine?.Display ?? DetailTable?.Display ?? "";
+    public string DetailTitle => DetailRoutine?.FullName ?? DetailTable?.FullName ?? "";
     public string DetailKind => DetailRoutine is { } r ? Loc.T(r.Kind == DbRoutineKind.Procedure ? "detail.procedure" : "detail.function")
         : DetailTable is null ? "" : DetailTable.Kind == DbObjectKind.View ? Loc.T("detail.view") : Loc.T("detail.table");
     public string HistoryTitle => HistoryCount > 0 ? Loc.F("cv.history.count", HistoryCount) : Loc.T("cv.history");
@@ -73,6 +84,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         _app = app;
         Entry = entry;
         Dialect = Dialect.For(entry.Kind);
+        CurrentDatabase = HasDatabases && entry.Database.Length > 0 ? entry.Database : null;
         Title = entry.Name;
         ToolTip = $"{DbKinds.Name(entry.Kind)} · {entry.Target}";
         Staging.Changed += OnStagingChanged;
@@ -118,6 +130,37 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         if (_opening == task) _opening = null;
         return session;
     }
+
+    /// <summary>The session that runs on <paramref name="database"/> (null: the connection's own).</summary>
+    public async Task<DbSession?> EnsureSessionAsync(string? database) =>
+        await EnsureSessionAsync() is { } main ? SessionFor(main, database) : null;
+
+    private DbSession SessionFor(DbSession main, string? database)
+    {
+        if (!HasDatabases || database is null || database == CurrentDatabase) return main;
+        if (!_dbSessions.TryGetValue(database, out var s)) _dbSessions[database] = s = main.ForDatabase(database);
+        return s;
+    }
+
+    /// <summary>The database something marked with <paramref name="database"/> really runs on; null without databases.</summary>
+    public string? EffectiveDatabase(string? database) => HasDatabases ? database ?? CurrentDatabase : null;
+
+    /// <summary>
+    /// The structure of <paramref name="database"/> (null: the connection's own). Empty while it has not been read;
+    /// asking for it starts reading it, so a console on another database gets its completion a moment later.
+    /// </summary>
+    public SchemaSnapshot SchemaFor(string? database)
+    {
+        if (!HasDatabases) return Schema;
+        var name = database ?? CurrentDatabase;
+        if (_databases.FirstOrDefault(n => n.Name == name) is not { } node) return SchemaSnapshot.Empty;
+        if (node.Schema is null && node.Loading is null && node.Error is null) _ = LoadDatabaseAsync(node);
+        return node.Schema ?? SchemaSnapshot.Empty;
+    }
+
+    /// <summary>Every table read so far, of every database.</summary>
+    public IEnumerable<DbTable> AllTables => HasDatabases ? _databases.SelectMany(n => n.Schema?.Tables ?? []) : Schema.Tables;
+    private IEnumerable<DbRoutine> AllRoutines => HasDatabases ? _databases.SelectMany(n => n.Schema?.Routines ?? []) : Schema.Routines;
 
     private async Task<DbSession?> OpenAsync()
     {
@@ -207,22 +250,105 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         IsBusy = true;
         try
         {
+            if (HasDatabases)
+            {
+                await RefreshDatabasesAsync(session);
+                return;
+            }
             var clock = System.Diagnostics.Stopwatch.StartNew();
             Schema = await Task.Run(() => session.LoadSchemaAsync(CancellationToken.None));
-            if (_expanded.Count == 0 && Schema.DefaultSchema is { } d) _expanded.Add("s:" + d);
+            if (_expanded.Count == 0 && Schema.DefaultSchema is { } d && Schema.Schemas.Count > 1) _expanded.Add("s:/" + d);
             RebuildTree();
-            foreach (var t in Docs.OfType<TableDataViewModel>())
-                if (Schema.Find(t.Table.Schema, t.Table.Name) is { } fresh) t.Rebind(fresh);
-            if (DetailTable is { } dt) ShowDetails(Schema.Find(dt.Schema, dt.Name));
+            Rebind(Schema);
             Notice = Loc.F("conn.schemaLoaded", Loc.Plural("common.tables", Schema.Tables.Count), ResultViewModel.FormatMs(clock.ElapsedMilliseconds));
         }
         catch (Exception ex) { Notice = ex.Message; }
         finally { IsBusy = false; }
     }
 
+    /// <summary>
+    /// Lists the server's databases and reads again the ones already read, plus the connection's own (consoles
+    /// complete with it). The others are read when they are opened.
+    /// </summary>
+    private async Task RefreshDatabasesAsync(DbSession session)
+    {
+        var (all, current) = await Task.Run(() => session.LoadDatabasesAsync(CancellationToken.None));
+        CurrentDatabase = current;
+        var old = _databases.ToDictionary(n => n.Name, StringComparer.Ordinal);
+        _databases = all.Select(d => old.TryGetValue(d.Name, out var n) ? n : new DatabaseNode { Name = d.Name }).ToList();
+        for (int i = 0; i < all.Count; i++) _databases[i].IsSystem = all[i].IsSystem;
+        foreach (var gone in _dbSessions.Keys.Where(k => _databases.All(n => n.Name != k) || k == current).ToList())
+        {
+            _ = _dbSessions[gone].DisposeAsync().AsTask();
+            _dbSessions.Remove(gone);
+        }
+        // The first time, the connection's own database opens, unless it is a system one nobody asked for
+        // (SQL Server's master when the database field is empty).
+        if (!_databasesListed && current is not null && _databases.FirstOrDefault(n => n.Name == current) is { } home
+            && (!home.IsSystem || Entry.Database.Length > 0))
+        {
+            _expanded.Add("d:" + current);
+            if (home.IsSystem) _expanded.Add("sys");
+        }
+        _databasesListed = true;
+        foreach (var c in Docs.OfType<ConsoleViewModel>()) c.OnDatabasesChanged();
+        RebuildTree();
+        Notice = Loc.Plural("conn.databases", _databases.Count);
+        var reload = _databases.Where(n => n.Schema is not null || n.Error is not null || n.Name == current || IsOpen("d:" + n.Name)).ToList();
+        await Task.WhenAll(reload.Select(LoadDatabaseAsync));
+    }
+
+    /// <summary>Reads one database's structure; its row shows "Cargando…" meanwhile, or the error.</summary>
+    private Task LoadDatabaseAsync(DatabaseNode node)
+    {
+        if (node.Loading is { } running) return running;
+        var task = LoadAsync();
+        if (!task.IsCompleted) node.Loading = task;
+        return task;
+
+        async Task LoadAsync()
+        {
+            try
+            {
+                if (await EnsureSessionAsync() is not { } main) return;
+                node.Error = null;
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                var session = SessionFor(main, node.Name);
+                var fresh = (await Task.Run(() => session.LoadSchemaAsync(CancellationToken.None))).Stamp(node.Name);
+                if (node.Schema is null && fresh.DefaultSchema is { } d && fresh.Schemas.Count > 1) _expanded.Add($"s:{node.Name}/{d}");
+                node.Schema = fresh;
+                if (node.Name == CurrentDatabase) Schema = fresh;
+                Rebind(fresh);
+                Notice = Loc.F("conn.databaseLoaded", node.Name, Loc.Plural("common.tables", fresh.Tables.Count), ResultViewModel.FormatMs(clock.ElapsedMilliseconds));
+            }
+            catch (Exception ex)
+            {
+                node.Error = ex.Message;
+                Notice = $"{node.Name}: {ex.Message}";
+            }
+            finally
+            {
+                node.Loading = null;
+                RebuildTree();
+            }
+        }
+    }
+
+    /// <summary>"Refrescar" on a database row: reads just that one again.</summary>
+    public Task RefreshDatabaseAsync(string database) =>
+        _databases.FirstOrDefault(n => n.Name == database) is { } node ? LoadDatabaseAsync(node) : Task.CompletedTask;
+
+    /// <summary>After a structure is read again its objects are new: open tabs and the detail panel move to them.</summary>
+    private void Rebind(SchemaSnapshot fresh)
+    {
+        foreach (var t in Docs.OfType<TableDataViewModel>())
+            if (t.Table.Database == fresh.Database && fresh.Find(t.Table.Schema, t.Table.Name) is { } table) t.Rebind(table);
+        if (DetailTable is { } dt && dt.Database == fresh.Database) ShowDetails(fresh.Find(dt.Schema, dt.Name));
+    }
+
     // ------------------------------------------------------------------ schema tree
 
-    private bool UseSchemaLevel => Schema.Schemas.Count > 1;
+    private bool IsOpen(string key, bool byDefault = false) => _expanded.Contains(key) != byDefault;
 
     public void RebuildTree()
     {
@@ -231,55 +357,116 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         var q = TreeFilter.Trim();
         if (q.Length > 0)
         {
-            // Filtering: a flat list of matching tables, qualified when there are several schemas.
-            foreach (var t in Schema.Tables.Where(t => Dialogs.Fuzzy(t.Name, q)).OrderBy(t => !t.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase)).ThenBy(t => t.Name.Length).Take(500))
-                AddTable(rows, t, 0, qualified: UseSchemaLevel);
-            foreach (var r in Schema.Routines.Where(r => Dialogs.Fuzzy(r.Name, q)).OrderBy(r => !r.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase)).ThenBy(r => r.Name.Length).Take(200))
-                AddRoutine(rows, r, 0, qualified: UseSchemaLevel);
+            // Filtering: a flat list of matching objects of every database read so far, qualified when there are
+            // several databases or schemas.
+            bool qualified = HasDatabases || Schema.Schemas.Count > 1;
+            foreach (var t in AllTables.Where(t => Dialogs.Fuzzy(t.Name, q)).OrderBy(t => !t.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase)).ThenBy(t => t.Name.Length).Take(500))
+                AddTable(rows, t, 0, qualified);
+            foreach (var r in AllRoutines.Where(r => Dialogs.Fuzzy(r.Name, q)).OrderBy(r => !r.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase)).ThenBy(r => r.Name.Length).Take(200))
+                AddRoutine(rows, r, 0, qualified);
         }
-        else if (UseSchemaLevel)
+        else if (HasDatabases)
         {
-            foreach (var s in Schema.Schemas)
+            foreach (var n in _databases.Where(n => !n.IsSystem)) AddDatabase(rows, n, 0);
+            var system = _databases.Where(n => n.IsSystem).ToList();
+            if (system.Count > 0)
             {
-                var key = "s:" + s;
-                var tables = Schema.Tables.Where(t => t.Schema == s).ToList();
-                var routines = Schema.Routines.Where(r => r.Schema == s).ToList();
-                rows.Add(new SchemaRow { Kind = SchemaRowKind.Schema, Text = s, Detail = (tables.Count + routines.Count).ToString("N0"), Schema = s, IsExpanded = _expanded.Contains(key) });
-                if (!_expanded.Contains(key)) continue;
-                foreach (var t in tables) AddTable(rows, t, 1, false);
-                foreach (var r in routines) AddRoutine(rows, r, 1, false);
+                bool open = IsOpen("sys");
+                rows.Add(new SchemaRow { Kind = SchemaRowKind.Folder, Text = Loc.T("tree.system"), Detail = system.Count.ToString("N0"), Key = "sys", IsExpanded = open });
+                if (open) foreach (var n in system) AddDatabase(rows, n, 1);
             }
         }
-        else
-        {
-            foreach (var t in Schema.Tables) AddTable(rows, t, 0, false);
-            foreach (var r in Schema.Routines) AddRoutine(rows, r, 0, false);
-        }
+        else AddObjects(rows, Schema, null, 0);
 
         if (rows.Count == 0 && _session is not null)
-            rows.Add(new SchemaRow { Kind = SchemaRowKind.Message, Text = q.Length > 0 ? Loc.T("tree.noMatch") : Loc.T("tree.empty") });
+            rows.Add(Message(q.Length > 0 ? Loc.T("tree.noMatch") : HasDatabases && !_databasesListed ? Loc.T("common.loading") : Loc.T("tree.empty"), 0));
 
         SchemaRows.Clear();
         foreach (var r in rows) SchemaRows.Add(r);
         if (keep is not null)
-            SelectedRow = SchemaRows.FirstOrDefault(r => r.Kind == keep.Kind && r.Table?.Display == keep.Table?.Display && r.Column?.Name == keep.Column?.Name
-                                                         && r.Schema == keep.Schema && r.Routine?.Display == keep.Routine?.Display && r.Routine?.Id == keep.Routine?.Id);
+            SelectedRow = SchemaRows.FirstOrDefault(r => r.Kind == keep.Kind && r.Key == keep.Key && r.Table?.FullName == keep.Table?.FullName && r.Column?.Name == keep.Column?.Name
+                                                         && r.Routine?.FullName == keep.Routine?.FullName && r.Routine?.Id == keep.Routine?.Id);
+    }
+
+    private static SchemaRow Message(string text, int level) => new() { Kind = SchemaRowKind.Message, Text = text, Level = level };
+
+    private void AddDatabase(List<SchemaRow> rows, DatabaseNode n, int level)
+    {
+        var key = "d:" + n.Name;
+        bool open = IsOpen(key);
+        rows.Add(new SchemaRow
+        {
+            Kind = SchemaRowKind.Database, Text = n.Name, Database = n.Name, Key = key, Level = level, IsExpanded = open,
+            IsCurrent = n.Name == CurrentDatabase, Detail = n.Schema is { } s ? (s.Tables.Count + s.Routines.Count).ToString("N0") : null,
+        });
+        if (!open) return;
+        if (n.Error is { } error) rows.Add(Message(error, level + 1));
+        else if (n.Schema is null) rows.Add(Message(Loc.T("common.loading"), level + 1));
+        else if (!AddObjects(rows, n.Schema, n.Name, level + 1)) rows.Add(Message(Loc.T("tree.empty"), level + 1));
+    }
+
+    /// <summary>
+    /// A database's schemas (when it has several) and in each one its folders of tables, views, procedures and
+    /// functions. False when it holds nothing.
+    /// </summary>
+    private bool AddObjects(List<SchemaRow> rows, SchemaSnapshot s, string? db, int level)
+    {
+        if (s.Tables.Count == 0 && s.Routines.Count == 0) return false;
+        if (s.Schemas.Count <= 1)
+        {
+            AddFolders(rows, s.Tables, s.Routines, db + "/", level);
+            return true;
+        }
+        foreach (var name in s.Schemas)
+        {
+            var key = $"s:{db}/{name}";
+            var tables = s.Tables.Where(t => t.Schema == name).ToList();
+            var routines = s.Routines.Where(r => r.Schema == name).ToList();
+            bool open = IsOpen(key);
+            rows.Add(new SchemaRow
+            {
+                Kind = SchemaRowKind.Schema, Text = name, Detail = (tables.Count + routines.Count).ToString("N0"),
+                Schema = name, Database = db, Key = key, Level = level, IsExpanded = open,
+            });
+            if (!open) continue;
+            if (tables.Count + routines.Count == 0) rows.Add(Message(Loc.T("tree.empty"), level + 1));
+            else AddFolders(rows, tables, routines, $"{db}/{name}", level + 1);
+        }
+        return true;
+    }
+
+    /// <summary>Folders as in SQL Server's explorer; the tables one starts open, empty ones are left out.</summary>
+    private void AddFolders(List<SchemaRow> rows, IReadOnlyList<DbTable> tables, IReadOnlyList<DbRoutine> routines, string path, int level)
+    {
+        Folder("T", "tree.tables", tables.Where(t => t.Kind == DbObjectKind.Table).ToList(), true, (t, l) => AddTable(rows, t, l, false));
+        Folder("V", "tree.views", tables.Where(t => t.Kind == DbObjectKind.View).ToList(), false, (t, l) => AddTable(rows, t, l, false));
+        Folder("P", "tree.procedures", routines.Where(r => r.Kind == DbRoutineKind.Procedure).ToList(), false, (r, l) => AddRoutine(rows, r, l, false));
+        Folder("F", "tree.functions", routines.Where(r => r.Kind == DbRoutineKind.Function).ToList(), false, (r, l) => AddRoutine(rows, r, l, false));
+
+        void Folder<T>(string id, string label, List<T> items, bool byDefault, Action<T, int> add)
+        {
+            if (items.Count == 0) return;
+            var key = $"f:{path}/{id}";
+            bool open = IsOpen(key, byDefault);
+            rows.Add(new SchemaRow { Kind = SchemaRowKind.Folder, Text = Loc.T(label), Detail = items.Count.ToString("N0"), Key = key, Level = level, IsExpanded = open });
+            if (open) foreach (var x in items) add(x, level + 1);
+        }
     }
 
     private void AddTable(List<SchemaRow> rows, DbTable t, int level, bool qualified)
     {
-        var key = "t:" + t.Display;
+        var key = "t:" + t.FullName;
         bool open = _expanded.Contains(key);
         rows.Add(new SchemaRow
         {
             Kind = t.Kind == DbObjectKind.View ? SchemaRowKind.View : SchemaRowKind.Table,
-            Text = qualified ? t.Display : t.Name,
+            Text = qualified ? t.FullName : t.Name,
             Detail = t.CanEdit || t.Kind == DbObjectKind.View ? null : Loc.T("tree.noKey"),
-            Level = level, Table = t, Schema = t.Schema, IsExpanded = open,
+            Level = level, Table = t, Schema = t.Schema, Database = t.Database, Key = key, IsExpanded = open,
         });
         if (!open) return;
         foreach (var c in t.Columns)
-            rows.Add(new SchemaRow { Kind = SchemaRowKind.Column, Text = c.Name, Detail = c.DataType, Level = level + 1, Table = t, Column = c });
+            rows.Add(new SchemaRow { Kind = SchemaRowKind.Column, Text = c.Name, Detail = c.DataType, Level = level + 1, Table = t, Column = c, Database = t.Database });
     }
 
     private static void AddRoutine(List<SchemaRow> rows, DbRoutine r, int level, bool qualified)
@@ -288,25 +475,32 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         rows.Add(new SchemaRow
         {
             Kind = r.Kind == DbRoutineKind.Procedure ? SchemaRowKind.Procedure : SchemaRowKind.Function,
-            Text = qualified ? r.Display : r.Name,
+            Text = qualified ? r.FullName : r.Name,
             Detail = r.Parameters.Count == 0 ? "()" : r.Signature.Length <= 32 ? r.Signature : "(" + Loc.Plural("detail.params", r.Parameters.Count) + ")",
-            Level = level, Routine = r, Schema = r.Schema,
+            Level = level, Routine = r, Schema = r.Schema, Database = r.Database,
         });
     }
 
     public void Toggle(SchemaRow row)
     {
         if (!row.CanExpand) return;
-        var key = row.Kind == SchemaRowKind.Schema ? "s:" + row.Schema : "t:" + row.Table!.Display;
+        if (row.Key is not { } key) return;
         if (!_expanded.Remove(key)) _expanded.Add(key);
         SelectedRow = row;
+        // Opening a database reads it; one that failed is tried again.
+        if (row.Kind == SchemaRowKind.Database && !row.IsExpanded
+            && _databases.FirstOrDefault(n => n.Name == row.Database) is { Schema: null, Loading: null } node)
+        {
+            node.Error = null;
+            _ = LoadDatabaseAsync(node);
+        }
         RebuildTree();
     }
 
     /// <summary>Double click / Enter / F4 on a table: its data; on a column: the table's data.</summary>
     public void Activate(SchemaRow row)
     {
-        if (row.Kind == SchemaRowKind.Schema) Toggle(row);
+        if (row.Kind is SchemaRowKind.Database or SchemaRowKind.Folder or SchemaRowKind.Schema) Toggle(row);
         else if (row.Routine is { } r) _ = OpenRoutineSourceAsync(r);
         else if (row.Table is { } t) OpenTable(t);
     }
@@ -320,7 +514,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
 
     public void OpenTable(DbTable t)
     {
-        var existing = Docs.OfType<TableDataViewModel>().FirstOrDefault(x => x.Table.Display == t.Display);
+        var existing = Docs.OfType<TableDataViewModel>().FirstOrDefault(x => x.Table.FullName == t.FullName);
         if (existing is not null)
         {
             SelectedDoc = existing;
@@ -337,9 +531,9 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     public async Task QuickOpenTableAsync()
     {
         var t = await Dialogs.Pick(Loc.T("dlg.goToTable"), Loc.T("dlg.goToTable.watermark"),
-            q => Schema.Tables.Where(x => Dialogs.Fuzzy(x.Display, q))
+            q => AllTables.Where(x => Dialogs.Fuzzy(x.Display, q))
                 .OrderBy(x => !x.Name.StartsWith(q, StringComparison.OrdinalIgnoreCase)).ThenBy(x => x.Name.Length).Take(200).ToList(),
-            x => x.Name, x => (x.Schema is null ? "" : x.Schema + " · ") + Loc.Plural("common.columns", x.Columns.Count),
+            x => x.Name, x => (x.Database is null || x.Database == x.Schema ? "" : x.Database + " · ") + (x.Schema is null ? "" : x.Schema + " · ") + Loc.Plural("common.columns", x.Columns.Count),
             x => x.Kind == DbObjectKind.View ? Palette.Teal : Palette.Teal);
         if (t is not null) OpenTable(t);
     }
@@ -374,7 +568,8 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
 
     private async Task LoadExtrasAsync(DbTable t)
     {
-        if (_session is not { } s) return;
+        if (_session is not { } main) return;
+        var s = SessionFor(main, t.Database);
         _detailsLoad?.Cancel();
         var cts = _detailsLoad = new CancellationTokenSource();
         try
@@ -397,7 +592,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         foreach (var name in session.Consoles.ToList())
         {
             var path = Path.Combine(QueriesFolder, name);
-            if (File.Exists(path)) AddConsole(path, select: false);
+            if (File.Exists(path)) AddConsole(path, select: false, session.ConsoleDatabases.GetValueOrDefault(name));
         }
         if (Docs.Count == 0) AddConsole(NextConsolePath(), select: false);
         SelectedDoc = Docs.OfType<ConsoleViewModel>().FirstOrDefault(c => Path.GetFileName(c.FilePath) == session.Active) ?? Docs.FirstOrDefault();
@@ -415,9 +610,9 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         }
     }
 
-    private ConsoleViewModel AddConsole(string path, bool select)
+    private ConsoleViewModel AddConsole(string path, bool select, string? database = null)
     {
-        var c = new ConsoleViewModel(this, path);
+        var c = new ConsoleViewModel(this, path) { Database = HasDatabases ? database : null };
         c.CloseCommand = new RelayCommand(() => CloseDoc(c));
         Docs.Add(c);
         if (select) SelectedDoc = c;
@@ -425,11 +620,28 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     }
 
     [RelayCommand]
-    private void NewConsole()
+    private void NewConsole() => NewConsoleOn(null);
+
+    /// <summary>A new console that runs on <paramref name="database"/> (null: the connection's own).</summary>
+    public void NewConsoleOn(string? database)
     {
-        var c = AddConsole(NextConsolePath(), select: true);
+        var c = AddConsole(NextConsolePath(), select: true, database);
         c.Save();
         SaveSession();
+    }
+
+    /// <summary>
+    /// The console to write into for <paramref name="database"/>: the selected one if it runs there, else the first
+    /// one that does, else a new one on it.
+    /// </summary>
+    private ConsoleViewModel ConsoleOn(string? database)
+    {
+        var want = EffectiveDatabase(database);
+        bool On(ConsoleViewModel c) => EffectiveDatabase(c.Database) == want;
+        var console = SelectedDoc is ConsoleViewModel selected && On(selected) ? selected
+            : Docs.OfType<ConsoleViewModel>().FirstOrDefault(On) ?? AddConsole(NextConsolePath(), false, database);
+        SelectedDoc = console;
+        return console;
     }
 
     /// <summary>Opens a .sql file of the queries folder that is not open yet.</summary>
@@ -445,12 +657,8 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         SaveSession();
     }
 
-    public void OpenInConsole(string sql)
-    {
-        var c = SelectedDoc as ConsoleViewModel ?? Docs.OfType<ConsoleViewModel>().FirstOrDefault() ?? AddConsole(NextConsolePath(), true);
-        c.InsertText(sql);
-        SelectedDoc = c;
-    }
+    /// <summary>Writes <paramref name="sql"/> in a console that runs on <paramref name="database"/>.</summary>
+    public void OpenInConsole(string sql, string? database = null) => ConsoleOn(database).InsertText(sql);
 
     public void CloseDoc(TabViewModel doc)
     {
@@ -480,6 +688,8 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         var s = _app.Store.SessionFor(Entry.Id);
         s.Consoles = Docs.OfType<ConsoleViewModel>().Select(c => Path.GetFileName(c.FilePath)).ToList();
         s.Active = SelectedDoc is ConsoleViewModel c ? Path.GetFileName(c.FilePath) : s.Active;
+        s.ConsoleDatabases = Docs.OfType<ConsoleViewModel>().Where(x => x.Database is not null)
+            .ToDictionary(x => Path.GetFileName(x.FilePath), x => x.Database!);
         _app.Store.Save();
     }
 
@@ -521,13 +731,14 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     /// whether they are kept in the history (and why not, when they cannot be). Returns the plans by statement, or
     /// null when the user cancels.
     /// </summary>
-    public async Task<Dictionary<string, DeletePlan>?> ConfirmDeletesAsync(IReadOnlyList<string> statements)
+    public async Task<Dictionary<string, DeletePlan>?> ConfirmDeletesAsync(IReadOnlyList<string> statements, string? database = null)
     {
         var plans = new Dictionary<string, DeletePlan>();
+        var schema = SchemaFor(database);
         foreach (var sql in statements)
-            if (DeletePlan.For(sql, Entry.Kind, Dialect, Schema) is { } plan) plans[sql] = plan;
+            if (DeletePlan.For(sql, Entry.Kind, Dialect, schema) is { } plan) plans[sql] = plan;
         if (plans.Count == 0) return plans;
-        if (await EnsureSessionAsync() is not { } session) return null;
+        if (await EnsureSessionAsync(database) is not { } session) return null;
 
         var lines = new List<string>();
         foreach (var plan in plans.Values)
@@ -597,7 +808,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
             await Dialogs.Message(Loc.T("conn.readOnly.title"), Loc.T("conn.readOnly.text"));
             return false;
         }
-        if (await EnsureSessionAsync() is not { } session) return false;
+        if (await EnsureSessionAsync(r.Database) is not { } session) return false;
         var preview = string.Join("\n", DeleteInverse.Statements(r, Dialect).Take(3).Select(s => s.Preview.Length > 200 ? s.Preview[..200] + "…" : s.Preview));
         var text = Loc.F("history.restore.text", Loc.Plural("common.rows", r.Rows.Count), r.TableDisplay,
             r.Time.ToLocalTime().ToString("yyyy-MM-dd HH:mm"), preview + (r.Rows.Count > 3 ? "\n…" : ""));
@@ -626,11 +837,11 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     /// <summary>The routine's code in a console of its own, as a script that recreates it: edit and run.</summary>
     public async Task OpenRoutineSourceAsync(DbRoutine r)
     {
-        if (await EnsureSessionAsync() is not { } session) return;
+        if (await EnsureSessionAsync(r.Database) is not { } session) return;
         try
         {
             var text = await Task.Run(() => session.LoadRoutineSourceAsync(r, CancellationToken.None));
-            var c = AddConsole(NextConsolePath(r.Name), select: true);
+            var c = AddConsole(NextConsolePath(r.Name), select: true, r.Database);
             c.InsertText(text);
             c.Save();
             SaveSession();
@@ -654,14 +865,13 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
             values = typed.Select((v, i) => Dialect.ArgLiteral(v, inputs[i])).ToList();
         }
         var sql = Dialect.CallSql(r, values);
-        var console = SelectedDoc as ConsoleViewModel ?? Docs.OfType<ConsoleViewModel>().FirstOrDefault() ?? AddConsole(NextConsolePath(), true);
-        SelectedDoc = console;
+        var console = ConsoleOn(r.Database);
         var script = sql.TrimEnd().EndsWith('/') || sql.TrimEnd().EndsWith(';') ? sql : sql + ";";
         console.InsertText(script);
         await console.RunScriptAsync(script);
     }
 
-    public void ScriptDropRoutine(DbRoutine r) => OpenInConsole(Dialect.DropSql(r) + ";");
+    public void ScriptDropRoutine(DbRoutine r) => OpenInConsole(Dialect.DropSql(r) + ";", r.Database);
 
     // ------------------------------------------------------------------ staging
 
@@ -692,7 +902,7 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         if (deletes.Count > 0)
         {
             // Deleting always asks, on any connection; the rows go to the history.
-            var byTable = string.Join("\n", deletes.GroupBy(s => s.Change.Table.Display).Select(g => $"• {g.Key}: {Loc.Plural("common.rows", g.Count())}"));
+            var byTable = string.Join("\n", deletes.GroupBy(s => s.Change.Table.FullName).Select(g => $"• {g.Key}: {Loc.Plural("common.rows", g.Count())}"));
             var keep = HistoryDays > 0 ? Loc.Plural("history.confirm.kept", HistoryDays) : Loc.T("history.confirm.keptForever");
             var text = Loc.F("staging.apply.deletes", Loc.Plural("staging.count", statements.Count), byTable, keep);
             if (IsProduction) text = Loc.F("history.confirm.production", Entry.Name) + "\n\n" + text;
@@ -706,18 +916,26 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
         try
         {
             var clock = System.Diagnostics.Stopwatch.StartNew();
-            var captured = new Dictionary<int, CapturedRows>();
-            var rows = await Task.Run(() => session.ApplyAsync(statements.Select(s => s.Command).ToList(), CancellationToken.None,
-                statements.Select(s => s.Capture).ToList(), captured));
-            // One history entry per table, with every row its deletes removed.
-            foreach (var g in captured.GroupBy(kv => statements[kv.Key].Change.Table.Display))
+            long rows = 0;
+            // One transaction per database (each has its own connection), in the order the changes were made; a
+            // database that fails keeps its changes, the ones already applied leave the panel.
+            foreach (var group in statements.GroupBy(s => s.Change.Table.Database).ToList())
             {
-                var first = statements[g.First().Key];
-                var all = new CapturedRows(g.First().Value.Columns, g.SelectMany(kv => kv.Value.Rows).ToList(), false);
-                var sql = string.Join("\n", g.Select(kv => statements[kv.Key].Preview));
-                Remember(DeleteRecord.Create(Entry, "staging", first.Change.Table.Schema, first.Change.Table.Name, sql, g.Count(), all, first.Change.Table, null, DateTimeOffset.Now));
+                var list = group.ToList();
+                var target = SessionFor(session, group.Key);
+                var captured = new Dictionary<int, CapturedRows>();
+                rows += await Task.Run(() => target.ApplyAsync(list.Select(s => s.Command).ToList(), CancellationToken.None,
+                    list.Select(s => s.Capture).ToList(), captured));
+                // One history entry per table, with every row its deletes removed.
+                foreach (var g in captured.GroupBy(kv => list[kv.Key].Change.Table.FullName))
+                {
+                    var first = list[g.First().Key];
+                    var all = new CapturedRows(g.First().Value.Columns, g.SelectMany(kv => kv.Value.Rows).ToList(), false);
+                    var sql = string.Join("\n", g.Select(kv => list[kv.Key].Preview));
+                    Remember(DeleteRecord.Create(Entry, "staging", first.Change.Table.Schema, first.Change.Table.Name, sql, g.Count(), all, first.Change.Table, null, DateTimeOffset.Now));
+                }
+                Staging.RemoveAll(list.Select(s => s.Change));
             }
-            Staging.Clear();
             Notice = Loc.F("staging.applied", Loc.Plural("common.rows", rows), ResultViewModel.FormatMs(clock.ElapsedMilliseconds));
             foreach (var t in Docs.OfType<TableDataViewModel>()) _ = t.LoadAsync();
         }
@@ -774,7 +992,19 @@ public sealed partial class ConnectionViewModel : TabViewModel, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         foreach (var c in Docs.OfType<ConsoleViewModel>()) c.Save();
+        foreach (var s in _dbSessions.Values) await s.DisposeAsync();
+        _dbSessions.Clear();
         if (_session is not null) await _session.DisposeAsync();
         _session = null;
     }
+}
+
+/// <summary>A database of the server in the tree: its structure is read the first time it is opened.</summary>
+public sealed class DatabaseNode
+{
+    public required string Name { get; init; }
+    public bool IsSystem { get; set; }
+    public SchemaSnapshot? Schema { get; set; }
+    public string? Error { get; set; }
+    public Task? Loading { get; set; }
 }

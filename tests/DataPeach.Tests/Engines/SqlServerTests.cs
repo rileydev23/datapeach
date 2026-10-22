@@ -11,6 +11,7 @@ public sealed class SqlServerTests : EngineTests
     };
     protected override string Password => "Peach_12345";
     protected override string? Schema => "dbo";
+    protected override string? SystemDatabase => "tempdb";
     protected override string SlowQuery => "WAITFOR DELAY '00:00:10'";
 
     protected override string Setup => """

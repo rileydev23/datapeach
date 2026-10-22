@@ -10,6 +10,8 @@ public sealed class ConnectionSession
     /// <summary>File names of the open consoles, in tab order.</summary>
     public List<string> Consoles { get; set; } = new();
     public string? Active { get; set; }
+    /// <summary>Database each console runs on, by file name, when it is not the connection's own.</summary>
+    public Dictionary<string, string> ConsoleDatabases { get; set; } = new();
 }
 
 public sealed class AppState

@@ -32,6 +32,27 @@ public sealed partial class ConsoleViewModel : TabViewModel
     [NotifyCanExecuteChangedFor(nameof(CancelCommand))]
     private bool _isRunning;
     [ObservableProperty] private string _runStatus = "";
+    /// <summary>
+    /// Database it runs on, on servers with several; null is the connection's own. A <c>USE</c> run here moves it.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DatabaseLabel))]
+    private string? _database;
+
+    public bool ShowDatabase => _owner.HasDatabases;
+    public string DatabaseLabel => _owner.EffectiveDatabase(Database) ?? Loc.T("console.database.none");
+
+    partial void OnDatabaseChanged(string? value) => _ = _owner.SchemaFor(value); // starts reading it, for the completion
+
+    /// <summary>The user (or a <c>USE</c>) moves the console to <paramref name="database"/>; it is remembered.</summary>
+    public void MoveTo(string? database)
+    {
+        Database = database == _owner.CurrentDatabase ? null : database;
+        _owner.SaveSession();
+    }
+
+    /// <summary>The server's databases were listed: the connection's own may have a name now.</summary>
+    public void OnDatabasesChanged() => OnPropertyChanged(nameof(DatabaseLabel));
 
     public bool HasResults => SelectedResult is not null;
     partial void OnSelectedResultChanged(ResultViewModel? oldValue, ResultViewModel? newValue)
@@ -112,8 +133,8 @@ public sealed partial class ConsoleViewModel : TabViewModel
     {
         if (statements.Count == 0 || IsRunning) return;
         if (!await _owner.ConfirmWritesAsync(statements)) return;
-        if (await _owner.ConfirmDeletesAsync(statements) is not { } deletes) return;
-        if (await _owner.EnsureSessionAsync() is not { } session) return;
+        if (await _owner.ConfirmDeletesAsync(statements, Database) is not { } deletes) return;
+        if (await _owner.EnsureSessionAsync(Database) is not { } session) return;
 
         Save();
         _run = new CancellationTokenSource();
@@ -125,6 +146,7 @@ public sealed partial class ConsoleViewModel : TabViewModel
         var total = Stopwatch.StartNew();
         int done = 0;
         bool changedStructure = false;
+        string? used = null;
         try
         {
             foreach (var sql in statements)
@@ -143,6 +165,7 @@ public sealed partial class ConsoleViewModel : TabViewModel
                     else await Task.Run(() => session.RunAsync(sql, collector, _owner.MaxRows, ct), ct);
                     done++;
                     if (SqlStatements.IsWrite(sql, Kind)) changedStructure |= IsDdl(sql);
+                    used = _owner.Dialect.UsedDatabase(sql) ?? used;
                 }
                 catch (Exception ex)
                 {
@@ -162,6 +185,7 @@ public sealed partial class ConsoleViewModel : TabViewModel
         finally
         {
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            if (used is not null) await MoveToAsync(session, used);
             IsRunning = false;
             _run.Dispose();
             _run = null;
@@ -174,6 +198,28 @@ public sealed partial class ConsoleViewModel : TabViewModel
         }
     }
 
+    /// <summary>
+    /// After a <c>USE</c>, the console goes on in that database, and the connection it ran on goes back to its own:
+    /// other consoles share it and must not find themselves somewhere else.
+    /// </summary>
+    private async Task MoveToAsync(Core.Db.DbSession session, string used)
+    {
+        var name = _owner.Databases.FirstOrDefault(n => string.Equals(n.Name, used, StringComparison.OrdinalIgnoreCase))?.Name ?? used;
+        if (_owner.EffectiveDatabase(Database) is { } from && from != name)
+        {
+            try { await Task.Run(() => session.RunAsync(_owner.Dialect.UseSql(from), new IgnoreSink(), 1, CancellationToken.None)); }
+            catch { /* the connection is gone; the next run opens a fresh one */ }
+        }
+        MoveTo(name);
+    }
+
+    private sealed class IgnoreSink : Core.Db.IResultSink
+    {
+        public void OnResult(IReadOnlyList<Core.Db.ResultColumn> columns) { }
+        public void OnRows(IReadOnlyList<object?[]> rows) { }
+        public void OnEnd(long recordsAffected, bool truncated) { }
+    }
+
     /// <summary>A confirmed DELETE or TRUNCATE: reads its rows first and keeps them in the delete history.</summary>
     private async Task RunDeleteAsync(Core.Db.DbSession session, string sql, Core.History.DeletePlan plan, ResultCollector collector, CancellationToken ct)
     {
@@ -181,9 +227,9 @@ public sealed partial class ConsoleViewModel : TabViewModel
         var backup = await Task.Run(() => session.DeleteWithBackupAsync(sql, plan.SelectSql, !plan.IsTruncate, ConnectionViewModel.MaxBackupRows, affected, ct), ct);
         // A delete that removed nothing leaves nothing to put back.
         if (affected.Affected == 0 && backup is not { Rows.Count: > 0 }) return;
-        var known = _owner.Schema.Find(plan.Schema, plan.Table);
+        var known = _owner.SchemaFor(Database).Find(plan.Schema, plan.Table);
         _owner.Remember(Core.History.DeleteRecord.Create(_owner.Entry, "console", plan.Schema, plan.Table, sql, affected.Affected, backup, known,
-            plan.Unsupported, DateTimeOffset.Now));
+            plan.Unsupported, DateTimeOffset.Now, _owner.EffectiveDatabase(Database)));
     }
 
     /// <summary>Passes the outcome on to the console's results and keeps the row count for the history.</summary>
@@ -206,7 +252,7 @@ public sealed partial class ConsoleViewModel : TabViewModel
     }
 
     public CompletionResult Complete(int caret) =>
-        SqlCompletion.Suggest(Document.Text, caret, _owner.Schema, _owner.Dialect);
+        SqlCompletion.Suggest(Document.Text, caret, _owner.SchemaFor(Database), _owner.Dialect);
 
     /// <summary>Puts text at the end (or replaces an empty console) and selects it: "abrir en consola".</summary>
     public void InsertText(string sql)

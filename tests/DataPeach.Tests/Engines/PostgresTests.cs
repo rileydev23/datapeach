@@ -6,6 +6,7 @@ public class PostgresTests : EngineTests
 {
     protected override ConnectionEntry Entry => new() { Kind = DbKind.Postgres, Host = "localhost", Port = 55432, Database = "peach", User = "peach" };
     protected override string? Schema => "public";
+    protected override string? SystemDatabase => "template1";
     protected override string SlowQuery => "SELECT pg_sleep(10)";
 
     protected override string Setup => """
@@ -31,6 +32,7 @@ public sealed class CockroachTests : PostgresTests
 {
     protected override ConnectionEntry Entry => new() { Kind = DbKind.Postgres, Host = "localhost", Port = 56257, Database = "defaultdb", User = "root" };
     protected override string Password => "";
+    protected override string? SystemDatabase => "system";
 
     // Its SQL procedures only take $1-style parameters, and it then fails to run their code back: the function only.
     protected override string? RoutineSetup => "CREATE OR REPLACE FUNCTION add_one(x integer) RETURNS integer LANGUAGE sql AS $$ SELECT x + 1 $$;";

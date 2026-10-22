@@ -55,7 +55,8 @@ public sealed class StagingArea
     public int Count => _changes.Count;
     public event Action? Changed;
 
-    private static string TableId(DbTable t) => t.Display;
+    /// <summary>The same table name in two databases of a server are two tables.</summary>
+    private static string TableId(DbTable t) => t.FullName;
 
     private StagedChange? Find(ChangeKind kind, DbTable t, RowKey key) =>
         _changes.FirstOrDefault(c => c.Kind == kind && c.Key?.Id == key.Id && TableId(c.Table) == TableId(t));
@@ -129,6 +130,13 @@ public sealed class StagingArea
     public void Remove(StagedChange c)
     {
         if (_changes.Remove(c)) Changed?.Invoke();
+    }
+
+    /// <summary>Takes back several changes at once: the ones that were just applied.</summary>
+    public void RemoveAll(IEnumerable<StagedChange> changes)
+    {
+        var set = changes.ToHashSet();
+        if (_changes.RemoveAll(set.Contains) > 0) Changed?.Invoke();
     }
 
     public void Clear()

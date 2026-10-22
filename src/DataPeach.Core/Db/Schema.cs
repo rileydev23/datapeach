@@ -8,6 +8,8 @@ public sealed record DbColumn(string Name, string DataType, bool Nullable, bool 
 /// <summary>A table or view with its columns. <see cref="Schema"/> is null where the engine has none (SQLite).</summary>
 public sealed class DbTable
 {
+    /// <summary>Database it lives in, on servers with several (set when its structure is read); null elsewhere.</summary>
+    public string? Database { get; set; }
     public string? Schema { get; init; }
     public required string Name { get; init; }
     public DbObjectKind Kind { get; init; }
@@ -17,6 +19,8 @@ public sealed class DbTable
     /// <summary>Editable in the grid: a table with a primary key (without one there is no safe WHERE).</summary>
     public bool CanEdit => Kind == DbObjectKind.Table && Columns.Any(c => c.IsPrimaryKey);
     public string Display => Schema is null ? Name : $"{Schema}.{Name}";
+    /// <summary>"ventas.dbo.clientes": tells apart the same table in two databases. MySQL's schema is the database.</summary>
+    public string FullName => Database is null || Database == Schema ? Display : $"{Database}.{Display}";
 
     public DbColumn? Column(string name) =>
         Columns.FirstOrDefault(c => c.Name == name) ?? Columns.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -27,6 +31,8 @@ public sealed class DbTable
 /// <summary>Everything the app knows about a database's structure, loaded in one go and cached per connection.</summary>
 public sealed class SchemaSnapshot
 {
+    /// <summary>The database it describes, on servers with several; null elsewhere.</summary>
+    public string? Database { get; private set; }
     public List<string> Schemas { get; init; } = new();
     public List<DbTable> Tables { get; init; } = new();
     /// <summary>Schema that unqualified names resolve to ("public", the current database…).</summary>
@@ -35,6 +41,15 @@ public sealed class SchemaSnapshot
     public List<DbRoutine> Routines { get; init; } = new();
 
     public static readonly SchemaSnapshot Empty = new();
+
+    /// <summary>Marks the snapshot, its tables and its routines as belonging to <paramref name="database"/>.</summary>
+    public SchemaSnapshot Stamp(string database)
+    {
+        Database = database;
+        foreach (var t in Tables) t.Database = database;
+        foreach (var r in Routines) r.Database = database;
+        return this;
+    }
 
     /// <summary>Finds a table by name, optionally qualified; unqualified names prefer the default schema.</summary>
     public DbTable? Find(string? schema, string name)
@@ -47,6 +62,9 @@ public sealed class SchemaSnapshot
                ?? Tables.FirstOrDefault(t => Same(t.Name, name));
     }
 }
+
+/// <summary>A database of the server; <see cref="IsSystem"/> ones (master, template1, mysql…) go in a folder apart.</summary>
+public sealed record DbDatabase(string Name, bool IsSystem);
 
 public sealed record DbIndex(string Name, bool Unique, string Definition);
 public sealed record DbForeignKey(string Name, string Definition);
@@ -70,6 +88,8 @@ public sealed record DbParameter(string Name, string DataType, ParamDirection Di
 /// </summary>
 public sealed class DbRoutine
 {
+    /// <summary>Database it lives in, as <see cref="DbTable.Database"/>.</summary>
+    public string? Database { get; set; }
     public string? Schema { get; init; }
     public required string Name { get; init; }
     public DbRoutineKind Kind { get; init; }
@@ -79,6 +99,7 @@ public sealed class DbRoutine
     public List<DbParameter> Parameters { get; init; } = new();
 
     public string Display => Schema is null ? Name : $"{Schema}.{Name}";
+    public string FullName => Database is null || Database == Schema ? Display : $"{Database}.{Display}";
     /// <summary>"(a int, b text)": what tells two overloads apart in the tree.</summary>
     public string Signature => "(" + string.Join(", ", Parameters.Where(p => p.Direction != ParamDirection.Out || Kind == DbRoutineKind.Procedure)
         .Select(p => ((p.Direction == ParamDirection.In ? "" : p.Direction.ToString().ToUpperInvariant() + " ") + p.Name + " " + p.DataType).Trim())) + ")";

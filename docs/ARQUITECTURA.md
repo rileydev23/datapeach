@@ -79,6 +79,17 @@ antes; medido, cuesta ~15 ms de arranque y nada de memoria. En Linux la app nece
   PostgreSQL y MySQL al abrir. SQL Server, Oracle y SAP ASE no tienen sesión de solo lectura: ahí solo frena la app
   (`SqlStatements.IsWrite`).
 
+**Varias bases por servidor.** En SQL Server, PostgreSQL, MySQL/MariaDB y SAP ASE (`Dialect.HasDatabases`) la
+conexión no se limita a una base: `LoadDatabasesAsync` lista las del servidor (`sys.databases` con
+`HAS_DBACCESS`, `pg_database` con `datallowconn`, `information_schema.SCHEMATA`, `master..sysdatabases`), marca las
+de sistema y dice en cuál cayó la conexión. Cada base tiene su propia `DbSession` (`ForDatabase`: la misma entrada
+con otro campo de base), creada al primer uso: así funciona igual en PostgreSQL, donde una conexión no puede leer
+otra base, y el SQL generado no lleva el nombre de la base. `ConnectionViewModel` guarda un `SchemaSnapshot` por
+base, leído al abrirla (`Stamp` marca tablas y rutinas con su base; `FullName` = `base.esquema.tabla`). Las
+consolas recuerdan su base (`ConnectionSession.ConsoleDatabases`); un `USE` (SQL Server, MySQL, ASE) mueve la consola
+y devuelve la conexión compartida a su base. El staging aplica una transacción por base, en orden, y quita del panel
+lo ya aplicado si una falla. El historial de borrados guarda la base para restaurar en ella.
+
 `Dialect` es lo único específico de cada motor: comillas, literales (para la vista previa), parámetros (`@pN`; en
 PostgreSQL con `CAST(@pN AS <tipo de la columna>)` para no depender de cómo el driver adivina el tipo; `:pN` en
 Oracle, `$pN` en DuckDB), el `SELECT` de una tabla (`LIMIT`, `TOP` en SQL Server, `FETCH FIRST` en Oracle), cadena

@@ -37,6 +37,12 @@ public partial class ConnectionView : UserControl
         {
             e.Handled = true;
             if (Vm is not { } vm || RowAt(e.Source) is not { } row) return;
+            if (row.Kind == SchemaRowKind.Database)
+            {
+                SchemaList.SelectedItem = row;
+                MenuPresenter.Show(SchemaList, DatabaseMenu(vm, row.Text));
+                return;
+            }
             if (row.Routine is { } r)
             {
                 SchemaList.SelectedItem = row;
@@ -80,11 +86,19 @@ public partial class ConnectionView : UserControl
     private static IReadOnlyList<MenuAction> TableMenu(ConnectionViewModel vm, Core.Db.DbTable t) => new List<MenuAction>
     {
         MenuAction.Sync(Loc.T("cv.menu.openData"), () => vm.OpenTable(t), "F4"),
-        MenuAction.Sync(Loc.T("cv.menu.select"), () => vm.OpenInConsole(vm.Dialect.SelectTable(t, null, null, 100) + ";")),
-        MenuAction.Sync(Loc.T("cv.menu.count"), () => vm.OpenInConsole(vm.Dialect.CountTable(t, null) + ";")),
+        MenuAction.Sync(Loc.T("cv.menu.select"), () => vm.OpenInConsole(vm.Dialect.SelectTable(t, null, null, 100) + ";", t.Database)),
+        MenuAction.Sync(Loc.T("cv.menu.count"), () => vm.OpenInConsole(vm.Dialect.CountTable(t, null) + ";", t.Database)),
         MenuAction.Separator,
         new(Loc.T("cv.menu.copyName"), () => Dialogs.CopyAsync(vm.Dialect.NameOf(t))),
         new(Loc.T("cv.menu.copyColumns"), () => Dialogs.CopyAsync(string.Join(", ", t.Columns.Select(c => vm.Dialect.Name(c.Name))))),
+    };
+
+    private static IReadOnlyList<MenuAction> DatabaseMenu(ConnectionViewModel vm, string database) => new List<MenuAction>
+    {
+        MenuAction.Sync(Loc.T("cv.menu.consoleHere"), () => vm.NewConsoleOn(database)),
+        new(Loc.T("cv.menu.refreshDatabase"), () => vm.RefreshDatabaseAsync(database)),
+        MenuAction.Separator,
+        new(Loc.T("cv.menu.copyName"), () => Dialogs.CopyAsync(vm.Dialect.Name(database))),
     };
 
     private static IReadOnlyList<MenuAction> RoutineMenu(ConnectionViewModel vm, Core.Db.DbRoutine r) => new List<MenuAction>

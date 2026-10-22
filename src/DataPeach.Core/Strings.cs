@@ -211,7 +211,7 @@ internal static class Strings
         ["table.reload.tip"] = ("Reload with this filter and order (Enter)", "Recargar con este filtro y orden (Enter)"),
         ["table.addRow"] = ("+ Row", "+ Fila"),
         ["table.openInConsole"] = ("Open in console", "Abrir en consola"),
-        ["table.loadMore"] = ("Next 1,000 rows", "1.000 filas más"),
+        ["table.loadMore"] = ("Next 1,000 rows", "1,000 filas más"),
         ["table.more"] = ("(there are more)", "(hay más)"),
         ["table.readOnly.connection"] = ("Read-only connection: rows cannot be edited.", "Conexión de solo lectura: las filas no se pueden editar."),
         ["table.readOnly.view"] = ("A view: its rows cannot be edited here.", "Es una vista: sus filas no se pueden editar aquí."),
